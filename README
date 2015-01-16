@@ -1,0 +1,799 @@
+Wyseman WYatt-erp SchEma MANager
+Kyle Bateman, November 2005
+
+Background
+-------------------------------------------------------------------------
+When I first started using SQL relational databases, there was one issue
+I continually struggled with:  How is it best to maintain the source 
+definition of my database schema.
+
+I started out editing my SQL in neatly commented text files.  During the
+testing phase, I would periodically drop the database and re-create it
+from my text files until I finally had a working system.
+
+This all worked out very well until I began to find the weaknesses in my
+design and wanted to fix them.  Now the problems was, I had live data
+in my tables so I couldn't just drop the database and start over.  I had
+to alter the database without disturbing it too much so it could stay in
+operation for my users.
+
+Like most people, I discovered the "alter" commands of SQL and began
+carefully adjusting tables, adding columns, altering views, changing
+functions etc.  The problem was, my original SQL files quickly began to
+become obsolete.  They described the schema I had originally crafted, but
+not the one it was becoming.
+
+For a while, I tried to keep them current.  Each time I would alter the
+database, I would edit my SQL files to reflect the changes I had made.
+But these changes never actually got tested so I was never quite sure if
+I had gotten them right.
+
+In one case, I found that in dropping and re-creating certain tables,
+I had inadvertently dropped certain key referential integrity triggers.
+This resulted in a large amount of bad data creeping into my database and
+long hours of work to fix it.
+
+In another case, I wanted to re-create my schema for another enterprise. 
+When I tried to run my SQL files, I found indeed they were full of errors.
+Even after fixing the errors, I was not quite sure they reflected my 
+original production system.
+
+I tried using pg_dump to dump out the schema from my production system
+and re-create it on the new system, but I was frustrated that the SQL was
+really not the original code I had written, but a bit more cryptic form.
+I was able to re-create the database exactly, but it proved difficult to
+modify it for the needs of the new enterprise except through a set
+of new alter commands.
+
+It finally occurred to me that the create/alter model of SQL assumes that 
+you are comfortable with the notion that the source for your model is
+contained within the working instance of the database yourself.  Any
+text files you create are merely temporary representations of the
+modifications you apply.  The model consists of the net result of all
+the changes that have been applied over time.  If you want to replicate
+or alter the model, you are limited to the alter/dump commands available
+and you'd better get it perfect as you apply your changes to the
+production database.
+
+As I used SQL more, I found myself using similar structures over and
+over again.  For example, when adding insert or update rules to views, I
+used similar syntax over and over with a few key parameter changes.
+Sometimes, I also found other similar table or function structures that
+could have been re-useable if only I had some kind of macro or scripting
+capability on top of SQL.
+
+Eventually, I set out to create a tool for managing my schema definitions
+that would help me solve these and a few other problems.
+
+I determined that it would be best to have my source model contained in
+text files rather than in the running instance of the database.  This
+would give me more control over my authoring content.  If I wanted to
+alter the model or create new instances, I could do it at any time
+regardless of the accessibility of my production instance(s).
+
+By using text files, this also opened up the opportunity to use 
+pre-processing (macros, functions, etc.) to make my schema definitions
+more concise and maintainable.
+
+My original attempt consisted of a handful of shell scripts and a 
+syntactical convention for placing bits of SQL inside my schema files in
+predictable ways so the shell scripts could execute the right bits of
+SQL at the right times.
+
+Certain sections of the files contained the code for dropping certain
+objects.  Other sections had the SQL to create those same objects.
+Objects were also categorized by type which led to the very handy feature
+of being able to drop and recreate all objects of a certain kind (like
+re-indexing the whole database from a single command.)
+
+I used m4 to pre-process my files, so I could begin to wrap bits of code
+in macros.  This allowed me to create more SQL from a smaller set of
+source code.  The result was that certain kinds of changes only needed
+to be made in one place and the changes would propagate throughout the
+database.
+
+I also had a method by which certain source files were dependent upon
+others.  This assured that the database objects were build (and/or 
+dropped) in the right order.
+
+All this worked so well, I decided to take another crack at it and see
+if I could make it even better.  I decided to make it a part of my
+open-source ERP toolkit Wyatt-ERP and added a data-dictionary
+capability for storing more information about tables, columns and
+column values.  The result was Wyseman.
+
+I very much like the scripting capabilities of Tcl.  M4 had a number of
+problems that worked out much better in Tcl.  The Tcl list constructs
+also proved to be a great way to package the SQL bits and organize them
+into the proper dependencies.
+
+With the current implementation of Wyseman, it is possible to create an
+entire database quickly and easily.  With an appropriate Makefile, this
+can easily be done with a single command.  Because everything is 
+scripted in Tcl, you can even parameterize your schema (i.e. you can
+create schemas that are customized for different instances, but which
+are described by a single set of schema files.)
+
+Once you get your instance running, it is much easier to operate on the
+"living patient."  You can select any branch of the "tree" of 
+dependencies (like a function, for example), and with one command, you
+can drop the old version of the object and all its dependencies, and 
+then rebuild it again fresh from your schema definition files.
+
+This gives you the assurance that your running instance is truly the
+product of your definition files.  And you don't have to worry about
+whether all the dependent objects got rebuilt or not.
+
+If any of the objects you need to rebuild are tables, the data is
+dumped to a file before you do the drop, and re-inserted after the
+table is re-created.  As long as the same columns exist in the tables
+before and after, this all works.
+
+So if you need to change the columns of a table, you can write a shell
+script that does the following:
+
+  1. Correct any known anomalies in the data
+  2. You can safely drop any data integrity triggers if needed
+  3. Issue alter commands to add/drop table columns
+  4. Synthesize appropriate data for any newly added columns
+  5. Call wyseman to drop/restore the applicable database sections
+
+Before you run your script on the production instance, you can use
+pg_dump to create a sandbox copy of the instance and test your upgrade
+script on that.  When everything looks good, you can shut down access to
+the production instance and run the upgrade for real.
+
+-------------------------------------------------------------------------
+Program Description
+
+Wyseman is a collection of functions which draw on a series of database
+description files in order to setup and maintain a database schema in 
+postgresql.  No other database backend is currently supported. (Are there
+any others?)
+
+The user is expected to author a set of schema files.  Each file contains
+Tcl code describing a number of definitions for objects (a table, view, 
+function, etc.).  Each object contains the SQL commands necessary to create 
+(and optionally to drop) the object.  It may also contain other information
+(like permissions to access the object).
+
+The user can  decide how many objects to pack into a single schema file.
+However, it is recommended that each file be limited to a logical group of
+objects.  (A few related tables, with their associated views, functions, 
+triggers, etc.)
+
+Every object can be dependent upon any number of other objects.  An object
+will not be created until all the objects it depends upon have first been
+created.  An object will not be dropped without all its dependents first
+being dropped.
+
+You will get a warning if you try to drop a table that has not yet had its
+data dumped to a file.  Sequences are not thought to contain data.  Your
+create code should also be capable of initializing a sequence to a 
+reasonable value (like max+1).
+
+When running Wyseman, you can select one or more operations to be applied,
+in sequence, to one or more objects.  Valid operations include: dump, drop, 
+create, restore, and grant.  Objects can be included in the operation(s)
+by specifying objects with all their dependencies, objects of certain
+types, and/or objects with certain names.
+
+Valid functions:
+
+Dump:
+Run the program pg_dump, dumping only the data from included tables.
+The data files are saved in a directory you can specify from the command
+line.  In addition to a data dump, Wyseman also saves two other files.
+One contains the number of records dumped (so we can double-check this
+when restoring the data).  The other file contains the schema of the
+dumped file.  This latter file is for your reference only and is not
+normally used.  However, you can use it in a pinch to re-create the table
+and then re-import your data manually.
+
+Drop:
+All included objects are dropped from the database.  This is done by
+executing the SQL drop code associated with each object.  In most cases,
+this drop code is generated automatically for each object type.  But if
+you need to, you can specify it explicitly.  The "drop cascade" option
+is not specified automatically, so you need to make sure your objects 
+specify the proper dependencies and that all dependent objects are 
+included in the object list (-branch switch).
+
+Create:
+Each object is created by executing its associated SQL create command.
+For certain types of objects, you don't have to specify all the create
+SQL code.  Some of it can be filled in automatically (see individual
+object descriptions.)
+
+Restore:
+For every table included in the create list, this will find a dump file
+in the normal directory location and attempt to load it into the table.
+The command used for this is printed to stdout, so if there are problems,
+you can attempt to execute it manually.  This operation also counts the
+number of records loaded and compares it to the number of records before
+the dump was done.  Any differences are reported.
+
+Grant:
+This will issue grant statements giving permissions to various groups to
+access the object (see grant lists below).
+
+-------------------------------------------------------------------------
+Wyatt-ERP Dynamic Lists
+
+All objects are described as "dynamic lists."  This concept is similar
+to normal command line syntax but has been standardized for use in 
+Wyatt-ERP related modules as follows:
+
+A dynamic list is also a Tcl list.  If you don't know Tcl, this would be
+a good time to run the "tclhelp" command or read a Tcl primer.  Tcl lists
+consist of tokens, separated by whitespace, typically on a single line.
+You can use a backslash (\) to continue onto multiple lines.  You can 
+include whitespace of any kind inside a token if the token is quoted.
+Tokens can be quoted by using brackets ({}) or double quotes ("").  Brackets
+quote things literally.  But variable and command substitution still happen
+inside double quotes.
+
+A dynamic list is formally described by switch-value pairs similar to the
+command line of a typical unix command.  The switch names are preceded by 
+a minus sign (-) as follows.
+
+   -switch1 value1 -switch2 value2 -switch3 value3
+
+This notation allows values to be included in the list in any order.  But
+it can be a bit more typing than you may want.  So there are some shortcuts.
+
+First, switch names can generally be abbreviated in a way which is still
+unique among the possible switch options.
+
+Second, for each context in which a list is interpreted, there may be
+certain switch names that can be ommitted.  This implies that their values
+can be specified alone in the list, but they need to be provided in a
+pre-defined order.  For example, in a certain context, the order "-switch1,
+-switch2" might be implied.  In this case, you could specify any of the
+following and get the same result:
+
+   value1 value2 -switch3 value3
+   value1 -switch3 value3 value2 
+   -switch3 value3 value1 value2
+
+Some values may be optional.  Others may be required.  This is totally
+dependent upon the context in which the list is interpreted.  In some cases
+where certain values are required (like the first token), there is not an
+associated switch name.  You just have to specify the value alone, like:
+
+   command -switch1 value1 -switch2 value2 ...
+
+This dynamic list concept is very similar to the native syntax of Tcl
+itself.  But the idea of optional switches is a Wyatt-ERP extension to Tcl.
+
+-------------------------------------------------------------------------
+Command Line Parameters
+
+Wyseman is executed on the command line as follows:
+
+    wyseman <switches> <source_files>
+    
+For example, you might execute the following command:
+
+    wyseman -oper 'drop create' -branch mytable *.wms
+
+to rebuild the table called "mytable" and all its dependent objects.
+
+For source_files, you may specify any set of schema files, language files,
+default files (see file types below) which contain the needed objects
+and/or definitions to complete the requested operation(s).  There is no
+requirement to specify regular source files in any particular order since 
+all files get parsed before any operations are done.  However, if you have 
+a header file that contains macros or other definitions which will be 
+invoked from within another file, that header file must be specified first 
+on the command line.
+
+The various possible switches are as follows:
+
+-oper 'op1 op2 op3 ...'
+	This specifies the operations which will be performed (typically on 
+	the specified objects).  The normal operations for objects are 
+	described above (dump, drop, create, restore, grant).
+  
+	Additionally, the following operations can be invoked:
+  
+  text:	This will load the data dictionary tables with all language
+  	information from the specified language files (*.wmt)
+  	describing tables, columns and column values.
+  	
+  lib:	This will build a Tcl library with all default table/column
+  	information from the specified default files (*.wmd).
+  
+  list:	This will display a list of all specified objects (according to
+  	the branch,leaf,tincl,nincl,texcl,nexcl switches).
+  	
+  tree:	This is just like the list operation, except the objects are
+  	displayed according to their dependencies.  Note that since one
+  	object can have multiple dependencies from any other level of
+  	the structure, it does not make a traditional tree structure.
+  	It is a tree (of sorts) but a single object may be displayed
+  	multiple times in the graph.
+
+-db database_name
+	This allows you to specify the name of the database to connect to.
+	The default value is "wyatt".
+
+-host hostname
+	This allows you to specify the name of the computer to connect to.
+	The default value is "localhost".
+
+-work workdir
+	This allows you to specify where table dump files are saved (and
+	found).  The default is a directory called wyseman/dbname under
+	the work area set according to the wylib defaults.  So, if my
+	username is bob and I'm working on a database called "biz", the
+	work area might be something like:
+	
+	    /tmp/wyatt-bob/wyseman/biz
+
+-branch 'obj1 obj2 obj3'
+	This allows you to specify objects by name.  It also automatically
+	includes all objects which are dependent upon the ones you name 
+	without having to name them all explicitly.
+
+-excl  'obj1 obj2 obj3'
+	These allow you to specify objects explicitly by their name to
+	exclude from the object list.  Each object in the list is expanded 
+	according to standard wildcard characters (* ?)
+	from available choices in the specified schema files.
+
+-tincl  'type1 type2 type3'
+-texcl  'type1 type2 type3'
+	These allow you to specify objects explicitly by their type (table,
+	view, function, etc.) to include (or exclude) from the object list.
+	Types are not expanded for wildcards, but each the objects of the
+	specified type are added into the "-branch" specification, so you
+	will also get all dependent objects automatically included.
+
+-fincl  'file1 file2 file3'
+-fexcl  'file1 file2 file3'
+	These allow you to specify objects explicitly according to the
+	name of the file they are defined in.  (i.e. include all objects
+	from the file empl.wms).
+	Files are not expanded for wildcards, but each the objects of the
+	specified type are added into the "-branch" specification, so you
+	will also get all dependent objects automatically included.
+
+-repl	1/0
+	If true, the create code for all functions will be executed with
+	the "create or replace function" syntax instead of the normal 
+	"create function."  The drop code will be suppressed (even if you
+	execute the "drop" operation.  Also, all dependencies upon 
+	functions will be ignored.  This allows you to replace functions
+	without a drop/create of the objects that depend upon them.
+
+-dry	1/0
+	The value "-dry 1" will cause wyseman to do a "dry run."  It prints
+	out status messages but does not actually do any work.
+
+-warn	1/0
+	The value "-warn 0" will suppress the normal warning message if you
+	try to drop a table before dumping its data.  Use this with care.
+
+-debug	1/0
+	The value "-debug 1" will cause all the sql statements to be
+	written to stdout.  This is handy for debugging but it can also be
+	used to create an sql file for processing later.
+
+-crtab	1/0
+	Normally certain data is written to a table called wm.column_native
+	to speed up query operations on the data dictionary.  This table
+	can take several seconds to build and is rebuilt each time the
+	table and/or view structure is modified.  You can suppress this
+	with the value "-crtab 0".
+
+-dblib	libname
+	When the "lib" operation is selected, a Tcl library is generated
+	containing defaults for use with wylib display widgets.  This switch
+	allows you to name this library.  The default is "wmdb".
+
+-dblibver lib_version
+	When the "lib" operation is selected, a Tcl library is generated
+	containing defaults for use with wylib display widgets.  This switch
+	allows you to specify a version for this library.  The default 
+	version is "1.0".
+
+-trans 1/0
+	Attempt to run the entire series of commands as a single atomic
+	transaction; everything works, or everything fails. This has the
+	effect of errors that didn't get picked up by using "-dry 1" to
+	be seen without causing harm to the database.
+
+-------------------------------------------------------------------------
+Schema Files: (*.wms)
+
+This file type contains definitions for schema objects.  The format is
+regular Tcl, allowing the full range of Tcl scripting capabilities.  The
+only difference is, commands are parsed according to the dynamic list
+properties described above.  In practice, this just means you can supply
+different parts of the definition in different order if you like.
+
+Each object is formally described as a Tcl command as follows:
+	
+    object_type \
+    	-name		object_name \
+    	-dependency	dependencies \
+    	-create		create_code \
+    	-drop		drop_code \
+    	-grant		grant_code \
+    	-native		native_spec
+    
+or, in shorthand:
+    
+    object_type object_name dependencies create_code drop_code grant_code
+    
+where the drop_code and grant_code are optional.
+	
+- The object_type is from the set:
+  
+      table, index, view, function, sequence, trigger, other
+  
+  Each type of object may have slightly different
+  properties and switch types and values.  These are described in more
+  detail below.
+
+- The object_name is the name the object will go by in the database.
+  For example, it would be the name of the table or the name of the
+  function.
+
+- Dependencies is a Tcl list of any other objects (whether in the same
+  file or not) which the present object depends on.  In other words,
+  the other objects must exist before creating this one.  If the present
+  object is dropped, the dependent objects must first be dropped.  It is
+  understood that this drop requirement goes beyond some of the 
+  requirements of postgresql (i.e. in postgresql, some objects don't have
+  to be dropped, even though they are needed for another object.  However,
+  dropping and re-creating objects is cheap and easy with Wyseman, so we
+  can err on the side of listing dependencies just to make sure everything
+  gets built in the right order.
+
+- The create_code consists of the SQL code necessary to create the object.
+  Since the basic structure is in TCL, this could be the value of a variable,
+  or the result of a function call.  And even if it is defined as a literal
+  string (inside brackets), there is still a macro capability that will
+  allow you to set pre-defined, parameterized macros, or even to escape to
+  the Tcl command evaluator.
+  
+- The drop_code consists of the SQL code necessary to drop the object.
+  In most cases, this can be deduced automatically by Wyseman so you can
+  just omit it.
+
+- Grant_code is a list of groups and their associated privileges to the
+  present object.  This is only applicable to tables, views and sequences.
+  More is described about grant lists below.
+
+- Native_spec is applicable only to views.  It is included because in
+  certain cases, I can't figure out how to derive this information directly
+  from the database.  It has to do with determining the table from which
+  a given view column is derived.  It turns out that for certain ways in
+  which a view is constructed, this can be difficult to ascertain.  See
+  more on native tables below.
+
+  For type trigger, the table we are triggering on, and the trigger 
+  function will be deduced as dependencies automatically.
+  
+  For type function, the language we are triggering on, the language we
+  will be using will be deduced as a dependency automatically.  This also
+  implies that the language declaration should be declared as an "other"
+  object and must have the same name as the language it handles (plpgsql,
+  pltcl, etc.).
+  
+For each of the object types, there are certain unique behaviors of the
+parser as follows:
+
+- All objects
+  If the drop code is not specified, the program attempts to build it as
+  the fairly simple: "drop object_type object_name;"  SQL bits will have
+  a semicolon added at the end if it seems to be missing.
+
+- table
+  If the create code does not start out with the word "create," the
+  token is assumed to contain only the column definitions (the part
+  normally contained inside parentheses).  So the SQL is constructed as:
+  
+      "create table object_name (create_code);"
+
+- view
+  If the create code does not start out with the word "create," the
+  token is assumed to contain only the word "select" and that which
+  follows it.  So the SQL is constructed as:
+  
+      "create view object_name as create_code"
+
+  If the view contains rules, you can simply include them as part of
+  the create code.  Rules get dropped automatically with views, so they
+  don't need their own drop code.
+
+- sequence
+  If the create code does not start out with the word "create," the
+  token is assumed to contain only the code necessary to initialize
+  the sequence value.  So the SQL is constructed as:
+  
+      "create sequence $name; create_code"
+
+- index
+  You must list only a single dependency--the table on which the index
+  will be created.
+  
+  Typically you don't need to specify a name for the index.  A reasonably
+  good (and unique) one will be chosen for you.  The exception to this
+  requirement is the case where you do specify a full create script.
+  
+  If the create code does not start out with the word "create," the
+  token is assumed to contain only a Tcl list of the columns which you wish
+  to index.  These columns will be joined by commas to form a column_list
+  and the SQL is constructed as:
+  
+      "create index object_name on dependencies (column_list)"
+  
+  Again, if you specify a create script starting with the word
+  "create," you do need to specify a name for the index.
+  
+- function
+  If the create code does not start out with the word "create," the
+  three words "create function object_name" will be added as follows:
+  
+      "create function object_name create_code"
+
+  If the function is of some type other than SQL or C, the parser will
+  attempt to find the language (like plpgsql, for example) and add it to
+  the list of dependencies (if it is not already there).
+  
+  Also, if function parameters are named, the names will be dropped and
+  spaces removed in order to create the official object name.  For example,
+  the function:
+  
+      myfunc(p1 int4, p2 varchar)
+      
+  will get the offical object name of:
+  
+      myfunc(int4,varchar)
+
+  This is important when you are asking wyseman to rebuild the object.
+  You need to know how to refer to it.  It is also important as this is
+  how the object will be referred to in its drop code.
+
+- trigger
+  If the create code does not start out with the word "create," the
+  three words "create trigger object_name" will be added as follows:
+
+      "create trigger object_name create_code"
+      
+  Also, the parser will attempt to find the name of the function invoked
+  by the trigger and will include it automatically as a dependency.  So
+  you probably don't need to list it.  Functions for triggers are searched
+  only by their basename (not their parameter list).  So you should avoid
+  overloading functions used for triggers (you probably should avoid this
+  anyway).
+  
+- other
+  This is a catch-all category for other odd objects that don't fit in
+  anywhere else (like a language handler, for example).  You need to 
+  specify both the create_code and the drop_code explicitly.  There are
+  no shortcuts for this object type.
+
+-------------------------------------------------------------------------
+Macros
+
+Wyseman has implemented a macro system similar to that found in m4.  You
+can define simple, parameterized macros to encapsulate portions of your
+SQL code as follows:
+
+    define MAX {case when %1 > %2 then %1 else %2 end}
+
+Then in some object you create, you can use the macro like this:
+
+    view myview {mytable} {
+        select MAX(cost,price) from parts;
+    }
+
+You should be able to nest macros.
+
+There is also a special, pre-defined macro called "eval" which is
+probably more helpful than any other macro you might define.  This
+macro takes everything inside its parentheses and evaluates it 
+(ala the Tcl "eval" command) in the global context.  This allows you
+to escape the SQL context of the object and then call regular Tcl
+procedures, variables, etc. in order to produce SQL constructs.  There
+are examples of this in the sample schema provided (see common.tcl).
+
+-------------------------------------------------------------------------
+Grant Lists
+Wylib supports its own fixed permission structure.  You may define any
+number of privileges simply by including them in a grant specification
+in an object definition somewhere.
+
+Then, as part of the schema, you define a table called "priv."  In this 
+table, you enter a user ID, a privilege, and one of three "access levels."
+The access levels are "limit," "user," and "super."
+
+These access levels can be defined any way you choose, but the typically
+mean the following:
+
+user:	This is the access level for a typical normal user of the given
+	utility.  If a user needs write privilege for a table in order to
+	use the related utility, then you need to specify write for this
+	level.
+	
+limit:	This level is for people who should only be able to view data
+	within the application, but not change it or otherwise use it in
+	the way a normal user can.
+
+super:	This level is for a supervisor of the normal user of the utility.
+	Typically there would only be a small number of people with this
+	permission for any given utility or permission.  Someone with this
+	level of access is typically expected to fix mistakes or "undo"
+	operations by normal users of the utility.
+
+Triggers are attached to the priv table (see example code) such that each
+time a user is assigned some level of access in some privilege, that user
+is automatically added to a group with the appropriate access.  (This is
+all done in the backend.)  The grant process carried out by wyseman grants
+the appropriate permissions to those groups so that users can be added 
+and/or removed at runtime without having to do any more grants or revokes.
+
+You can specify a grant list as follows:
+
+-grant {
+    {events	select {insert update} delete}
+    {contacts	sel upd}
+    {doc	s}
+}
+
+Each record in the list contains a privilege (first parameter) followed by
+a set of three permissions (limit, user, super).  The higher levels also
+inherit all privileges from the lower levels.  (User level gets what limit
+has, super gets what user has.)
+
+This list would have the effect of granting select privilege to anyone with
+limit access to any of the three privileges, events, contacts or doc.
+
+People with "user" access to the "events" privilege would be able to
+select, insert and update the object.  People with "super" access would also
+be able to delete from the object.
+
+People with "user" access to the "contacts" privilege would be able to
+select or update the object.
+
+There is also a grant of the form:
+
+-grant {
+    {public	s}
+}
+
+which has the effect of giving everyone select permission to the object.
+Only a single permission is considered for the public privilege.
+
+Note that the select, insert, update and delete words can be abbreviated.
+And if none are specified, a single "select" in the limit privilege is
+assumed.
+
+-------------------------------------------------------------------------
+The Data Dictionary
+
+Wyseman also maintains a set of views and tables to describe other
+helpful information about your schema.  Text descriptions are maintained
+about all tables, columns and allowable values of certain columns.  These
+text strings are defined in the language files (described below).
+
+In addition, there are certain views maintained which hold information
+(derived from the internal postgresql tables) about things like primary
+keys, foreign keys, column types, etc.
+
+Most of this information is accessible through a standard Tcl API contained
+in a library (called wyseman) that is part of the wyseman utility itself.
+This can be accessed using the standard Tcl syntax:
+
+    package require wyseman
+
+The available functions are contained in the file wmdd.tcl.
+
+-------------------------------------------------------------------------
+Native Tables
+
+Typically, language information for columns is defined only for the tables
+where the column is native.  For example, for each column in each table,
+you define a title and a description for that column.
+
+But it is also possible to define views which also consist of columns.  In
+many cases, the view will contain columns which come directly from an
+underlying table.  In this case, we refer to the underlying table as the
+"native" table for that column.  The data dictionary is set up to 
+automatically show the appropriate column information, even if you look it
+up according to the view name (rather than the native table).
+
+You can build views on top of views on top of views, and the data dictionary
+should be able to trace the column back to its native table.  But there are
+some cases where it can't.  A typical example is where two tables are 
+involved in a view and each table has a column by the same name.  In this
+case it is difficult to know which of the tables you want to consider as the
+"native" table.  So the -native switch allows you to specify explicitly the
+one you want.  The syntax is as follows:
+
+    -native {tablename column1 column2 column3 ...}
+    
+This will make sure each of the named columns in the current view will be
+associated with "tablename" as their native table.
+
+Note that many columns are "manufactured" at the view level.  For example,
+if a column consists of the product of two underlying columns like:
+
+    price * quantity as total
+
+This column is derived from multiple columns so it has no underlying
+native table.  In this case, its language information should be declared
+for the view itself.  The view in which the column is "manufactured" is
+to be considered the "native" table.
+
+-------------------------------------------------------------------------
+Language files: *.wmt
+
+These files contain text that may be presented to the user about how
+tables, views and columns work.  These descriptions can be specified in
+any number of different languages.  The data represented is inserted into
+one of the three tables:
+
+    wm.table_text
+    wm.column_text
+    wm.value_text
+
+For tables and views, we want:
+    title	The default title for the table
+    stitle	A very short (alternate) title
+    help	A more complete help text for the table
+
+For columns, we will record the following:
+    title	The default column title
+    stitle	A very short (alternate) title
+    help	A more complete help text for the column
+
+Certain columns may be constrained to contain one of a finite set of
+values (like a pull-down menu or multiple choice option).  In these cases,
+we will enter each of the possible values along with a title and a 
+description for each of those values.
+
+By defining all these values in a central data dictionary (rather than in
+the application itself) multiple applications can access the same data,
+presenting a more consistent interface to the user.  These text items
+could well be contained in a run-time library rather than in the database.
+Indeed, the database is not the ultimate source of the data--but it does
+present a handy interface for querying the data.  The source data is 
+ultimately file-based, just like the schema definitions.  In the Wylib
+methodology, this is considered a more robust way to author and store the
+model.
+
+-------------------------------------------------------------------------
+Default files: *.wmd
+
+The schema files and language files are considered to be a part of the
+model (according to the model-view-controller method).  In contrast, the
+default files are more closely related to the view.
+
+These files contain default information about how tables and views will
+be displayed (typically in a tcl/tk program).  This information is not
+presently inserted into the database.  Instead, a run-time tcl library is
+created from it which can be loaded on demand by a wylib module who needs
+to display information about a database table.
+
+When you run "make lib," this library is created in a directory called 
+"wmdb" which should be a subdirectory of where you store your schema, text
+and default files.  You will have to get into that directory and do 
+"make install" to actually install the library on your system.  (Or point
+your TCLLIBDIR path appropriately to run out of the source dir.)
+
+Essentially, .wmd files contain a record for each table and view.  The
+parameters specified are those that would (or could) be specified directly
+to a standard Wylib dbe widget.  By storing them centrally (rather than in
+the application), multiple applications can access the same view, presenting
+the same view to the user without having to replicate code.
+
+Note that there is an "-inherits" switch that allows a view to inherit
+fields from an underlying table.  This avoids having to define values for
+the same field over and over.
+
+-------------------------------------------------------------------------

@@ -1,0 +1,61 @@
+# Copyright Action Target Inc. all rights reserved
+#------------------------------------------
+
+tabdef event -focus summary -fields {
+    {own_id		ent	5	{0 0 2}		-write 0 -state readonly}
+    {status		ent	5	{2 0}		-ini open -state readonly}
+    {priority		ent	2	{3 0}		-ini 5 -spin {int {1 10}} -just r -bg lightblue}
+    {seq		ent	5	{5 0}		-write 0 -hide 1}
+    {summary		ent	50	{0 1 3}		}
+    {deadline		ent	12	{3 1}		-spf cal}
+    {startdate		ent	10	{0 2}		-spf cal}
+    {starttime		ent	6	{1 2}		-spf tim -field {to_char(starttime,'HH:MI')}}
+    {length		ent	12	{2 2}		-field {to_char(length,'HH:MI')}}
+    {count		ent	2	{0 3}		-init 1 -just r -spin {int {0 999}}}
+    {repeat		pdm	8	{1 3}		-ini none}
+    {until		ent	12	{2 3}		-tem date -spf cal}
+    {category		ent	12	{3 3}		-spf exs}
+    {location		ent	58	{0 4 3}		-spf edw}
+    {busy		pdm	4	{3 4}		-ini busy}
+    {objective		mle    {58 3}	{0 5 3}		-spf edw}
+    {outcome		ent	58	{0 6 3}		-spf edw}
+    {created		ent	16	{0 7}		-write 0 -state readonly}
+    {lastmod		ent	16	{2 7}		-write 0 -state readonly}
+    {closed		ent	16	{3 7}		-write 0 -state readonly}
+    {see_ids		ent	16	{6 0}		-write 0 -hide 1}
+}
+
+tabdef event_v -fields {
+    {finish		ent	18	{3 2 2}		-state readonly -write 0}
+    {owner		ent	20	{}		-depend own_id  -title {:} -gmc {pack %w -in %p.own_id}}
+} -inherits event
+
+tabdef event_v_me -inherits event_v
+
+#------------------------------------------
+tabdef event_remind -focus advance -fields {
+    {own_id		ent	5	{1 0}		-hide 1 -state readonly}
+    {seq		ent	5	{2 0}		-hide 1 -state readonly}
+    {advance		ent	16	{0 1 2}		-init {15 min}}
+}
+
+tabdef event_remind_v -fields {
+    {event_id		ent	8	{0 0}		-state readonly}
+} -inherits event_remind
+
+tabdef event_remind_v_me -inherits event_remind_v
+
+#------------------------------------------
+tabdef event_empl -focus priv -fields {
+    {own_id		ent	5	{3 0}		-hide 1 -state readonly}
+    {seq		ent	5	{4 0}		-hide 1 -state readonly}
+    {priv		pdm	6	{1 0}		-ini option}
+    {inv_id		ent	5	{0 1 2}		-spf scm -data empl -just r}
+}
+
+tabdef event_empl_v -fields {
+    {event_id		ent	8	{0 0}		-state readonly}
+    {invite		ent	20	{}		-depend inv_id  -title {:} -gmc {pack %w -in %p.inv_id}}
+} -inherits event_empl
+
+tabdef event_empl_v_me -inherits event_empl_v

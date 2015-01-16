@@ -1,0 +1,37 @@
+4	Release 4 (numbered 0.40)
+        Changed to allow objects to be created in postgres namespaces
+        (schemas).  Many changes were made to the wyseman system catalog
+        tables and columns.  The interface for user programs should have
+        remained largely the same.
+
+3	Release 3	
+        Many bug fixes, many feature additions
+
+2	Release 2	
+	This release is updated for use with Postgres 8.1.0 which changed
+	fundamentally the way users and groups exist in the database.
+	Users and groups (roles) are now stored in the same table (pg_roles).
+	This shouldn't be a problem (as long as you avoid a username that
+	could be mistaken for a valid group name).
+	
+	Postgres also changed the way sequences work.  Typically you might
+	create a sequence and a table in association with each other.  Some
+	field in the table will draw values from the sequence in order to
+	populate itself.  Previously, wylib expected you to declare the 
+	sequence as being dependent upon the table (since it was then 
+	possible to create a table which referenced a non-existent sequence).
+	Then, we would populate the "create" field of the object with code
+	that would also initialize the sequence to a good number (like the
+	max value of the field that uses it).  That way, you would build
+	the table, re-populate it with data, and then call the sequence
+	creation code to get it initialized to a value appropriate to the
+	pre-existing data in the table.
+
+	This is no longer possible, so you must now declare the table to
+	be dependent upon the sequence (so the sequences get built first).
+	Then, after restoring data to the table, execute a script that will
+	initialize the sequences to their proper values.  This is shown in
+	the sample schema as "make sequence".
+
+1	Release 1
+	Initial open-source release of version 0.30

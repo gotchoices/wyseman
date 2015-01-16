@@ -1,0 +1,146 @@
+#TODO:
+#include(Copyright)
+#- 
+
+set fields(priv.pk) {empl_id priv}
+set fields(priv.in) {empl_id priv alevel cmt}
+set fields(priv.up) $fields(priv.in)
+set fields(priv.se) $fields(priv.up)
+
+#Table has an entry for each privilege (group) assigned to a user
+#----------------------------------------------------------------
+table priv {empl} {
+    empl_id	int4 not null references empl,	-- employee we are granting to
+    priv	varchar(16) not null,		-- the privilege (or module name)
+    
+ -- The access level being granted
+    alevel varchar(16) not null CHECK(alevel in ('limit', 'user', 'super')),
+
+    cmt varchar,				-- Any other comments
+
+    primary key (empl_id, priv)
+} -grant public
+
+#Base view which includes expanded version of the username
+#----------------------------------------------------------------
+view priv_v {priv empl_name(int4) name_empl(int4)} {
+    select
+        eval(fld_list $fields(priv.se)),
+
+        empl_name(empl_id) as casual,
+        name_empl(empl_id) as formal,
+        empl_username(empl_id) as username,
+        oid as _oid from priv;
+
+    eval(rule_insert priv_v priv $fields(priv.in))
+    eval(rule_update priv_v priv $fields(priv.up) $fields(priv.pk))
+    eval(rule_delete priv_v priv $fields(priv.pk))
+} -grant {
+    {public	s}
+    {privedit	s {i u d}}
+}
+
+# Add a user to a group, creating the group if necessary
+# Usage: add_to_group(user_id, groupname)
+#----------------------------------------------------------------
+function {add_to_group(eid int4, gname varchar)} {empl_username(int4)} {
+  returns boolean as $$
+    begin
+-- We require the group to already exist (created from the schema files)
+--        if not exists (select * from pg_group where groname = gname) then
+--            execute 'create group ' || gname;
+--        end if;
+
+--      execute 'alter group "' || gname || '" add user ' || pg_get_userbyid(eid);	-- old way (users/groups)
+        execute 'grant "' || $2 || '" to ' || empl_username($1);			-- new way (roles)
+        return true;
+    end;
+  $$ language plpgsql;
+}
+
+# Remove a user from a group, trying not to complain if either doesn't exist
+# Usage: drop_from_group(username, groupname)
+#----------------------------------------------------------------
+function {drop_from_group(eid int4, gname varchar)} {priv} {
+  returns boolean as $$
+    begin
+        if exists (select * from pg_group where groname = gname and eid = any(grolist)) then
+--          execute 'alter group "' || gname || '" drop user ' || empl_username(eid);	-- old way (users/groups)
+            execute 'revoke "' || gname || '" from ' || empl_username(eid);		-- new way (roles)
+            return true;
+        end if;
+        return false;
+    end;
+  $$ language plpgsql;
+}
+
+# Create a new user, and add him to all his groups
+# Usage: create_user(username)
+#----------------------------------------------------------------
+function {create_user(uname varchar, eid int4)} {priv add_to_group(int4,varchar) empl} {
+  returns int4 as $$
+    declare
+        trec	record;
+    begin
+        if exists (select * from pg_shadow where usename = uname) then
+            raise exception '!priv.UAE';	-- User already exists
+        end if;
+        if not exists (select * from empl_v where empl_id = eid) then
+            raise exception '!priv.UNF';	-- User not found
+        end if;
+        update empl_v set username = uname where empl_id = eid;
+        execute 'create user ' || uname;
+        for trec in select priv,alevel from priv where empl_id = eid loop
+            perform add_to_group(eid, trec.priv || '_' || trec.alevel);
+        end loop;
+        return eid;
+    end;
+  $$ language plpgsql;
+} -grant {
+    {privedit {} e}
+}
+
+# After inserting a new privilege
+#----------------------------------------------------------------
+function priv_tf_ai() {add_to_group(int4,varchar)} {
+  returns trigger security definer as $$
+    begin
+        perform add_to_group(new.empl_id, new.priv || '_' || new.alevel);
+        return new;
+    end;
+  $$ language plpgsql;
+}
+trigger priv_tr_ai {} {
+    after insert on priv for each row execute procedure priv_tf_ai();
+}
+
+# After changing a privilege
+#----------------------------------------------------------------
+function priv_tf_au() {add_to_group(int4,varchar) drop_from_group(int4,varchar)} {
+  returns trigger security definer as $$
+    begin
+        if new.empl_id != old.empl_id or new.priv != old.priv or new.alevel != old.alevel then
+            perform drop_from_group(old.empl_id, old.priv || '_' || old.alevel);
+            perform add_to_group(new.empl_id, new.priv || '_' || new.alevel);
+        end if;
+        return new;
+    end;
+  $$ language plpgsql;
+}
+trigger priv_tr_au {} {
+    after update on priv for each row execute procedure priv_tf_au();
+}
+
+# After deleting a privilege
+#----------------------------------------------------------------
+function priv_tf_ad() {drop_from_group(int4,varchar)} {
+  returns trigger security definer as $$
+    begin
+        perform drop_from_group(old.empl_id, old.priv || '_' || old.alevel);
+        return old;
+    end;
+  $$ language plpgsql;
+}
+trigger priv_tr_ad {} {
+    after delete on priv for each row execute procedure priv_tf_ad();
+}

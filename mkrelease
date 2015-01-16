@@ -1,0 +1,81 @@
+#!/bin/sh
+#Make the current directory into a release tar file
+buildin=/tmp		#build release tar in this directory
+
+make clean		#make it clean first
+
+read j1 j2 package j3 <<EOF
+$(grep PACKAGE Version.h |tr -d '"')
+EOF
+
+read j1 j2 version j3 <<EOF
+$(grep VERSION Version.h |tr -d '"')
+EOF
+
+read release junk <Release
+echo "package:$package: version:$version: release:$release:"
+
+fbase="$package-$version.$release"
+
+thisdir=$(basename $(pwd))
+
+tarfile="$buildin/$fbase.tgz"
+echo "building dir: $thisdir in $tarfile"
+
+targetdir=/tmp/$fbase
+
+# create a script to add in the copyright notice to the top of tcl files
+docopytcl=/tmp/docopytcl.py
+echo "#!/usr/bin/python
+import sys
+
+copyright = open('Copyright').readlines()
+
+for i in sys.stdin.readlines() :
+    if i[:-1] == '#include(Copyright)' :
+        for line in copyright :
+            print '# ' + line[:-1]
+    else :
+        print i[:-1]" > $docopytcl
+chmod +x $docopytcl
+
+# create a script to add in the copyright notice to the top of c and h files
+docopyc=/tmp/docopyc.py
+echo "#!/usr/bin/python
+import sys
+
+copyright = open('Copyright').readlines()
+
+for i in sys.stdin.readlines() :
+    if i[:-1] == '/*include(Copyright)*/' :
+        print '/* ' + copyright[0][:-1]
+        for line in copyright[1:-1] :
+            print ' * ' + line[:-1]
+        print ' * ' + copyright[-1][:-1] + ' */'
+    else :
+        print i[:-1]" > $docopyc
+chmod +x $docopyc
+
+echo "Formatting, tarring, and zipping files..."
+
+for file in $(find ./ |\
+              grep -v '/old' |\
+              grep -v '/TODO' |\
+              grep -v '/mkrelease' |\
+              grep -v '/CVS') ; do
+    if [ -d $file ] ; then
+        mkdir -p $targetdir/$file
+    elif echo "$file" | grep -E "(\.tcl$)|(wyseman$)" >&/dev/null ; then
+        cat $file | $docopytcl > $targetdir/$file
+    elif echo "$file" | grep -E "(\.c$)|(\.h$)" >&/dev/null ; then
+        cat $file | $docopyc > $targetdir/$file
+    else
+        cp $file $targetdir/$(dirname $file)
+    fi
+done
+cd $targetdir
+cd ..
+tar -czf $tarfile $fbase
+rm -rf $targetdir
+
+echo "Done"

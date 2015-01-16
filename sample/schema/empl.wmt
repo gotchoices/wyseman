@@ -1,0 +1,79 @@
+# Copyright Action Target Inc. all rights reserved
+#------------------------------------------
+tabtext empl		{Employees}		{Empl}		{Native table of employees with all their data} {
+    {empl_id		{Employee ID}		{EmpID}		{A unique number assigned to each employee}}
+    {prefname		{Preferred Name}	{Pref}		{Preferred name (Bob, Bill etc.)}}
+    {givnames		{Given Name}		{Given}		{Given name or names (Robert, William R. etc.)}}
+    {surname		{Surname}		{Surn}		{Last name or family name}}
+    {pertitle		{Personal Title}	{Title}		{Personal Title (Mr., Chief, Dr. etc.)}}
+    {jobtitle		{Job Title}		{Job}		{Any title that should come after the name (President, Shop Manager, etc.)}}
+    {addr		{Address}		{Addr}		{The employee's home address}}
+    {city		{City}			{Ct}		{City of home address}}
+    {state		{State}			{St}		{State of the home address}}
+    {zip		{Zip Code}		{Zip}		{Zip code of the home address}}
+    {country		{Country}		{Cty}		{Country of the home address (blank = USA)}}
+    {phone		{Home Phone}		{Home}		{Home phone number}}
+    {mobile		{Mobile Phone}		{Mobl}		{Mobile phone number (if any)}}
+    {workph		{Work Phone}		{Work}		{Work phone number (801-377-8033xNNN)}}
+    {bday		{Birth Date}		{Birth}		{Date of birth}}
+    {hiredate		{Hire Date}		{Hired}		{The date the employee was hired}}
+    {termdate		{Terminate Date}	{Term}		{The date employee quit or was terminated}}
+    {lrevdate		{Last Review}		{LRev}		{The date of the last supervisor review}}
+    {nrevdate		{Next Review}		{NRev}		{The date of the next scheduled supervisor review}}
+    {lastmod		{Modified}		{Mod}		{When this record was last updated}}
+
+    {status		{Status}		{Sta}		{Employee's current employment status} {
+        {active		{Current in good standing} {The employee is on current payroll and has no disciplinary actions open}}
+        {laidoff	{Laid off}		{The employee was terminated due to lack of work in his job description}}
+        {proba		{On Probation}		{The employee is still employed and working but may be terminated upon further infractions}}
+        {quit		{Quit, Rehirable}	{The employee terminated voluntarily and should not be re-hired}}
+        {quitnh		{Quit, Not rehirable}	{The employee terminated voluntarily but there is no reason not to re-hire him}}
+        {suspend	{Suspended}		{The employee is not allowed to come to work pending the outcome of some investigation or disciplinary action}}
+        {termin		{Terminated}		{The person's employment was terminated by the employer}}
+        {other		{Other}			{The person's employment status does not fit in any other category}}
+    }}
+    {empltyp		{Employee Type}		{Emp Typ}	{The type of hours or work schedule this employee is on} {
+        {reg		{Regular}	{The employee works a full work week and is expected to be with the company for some time}}
+        {part		{Part Time}	{The employee regularly works less than a full work week}}
+        {temp		{Temporary}	{The person's employment is intended to last for only a limited amount of time}}
+        {seas		{Seasonal}	{The person regularly works only during certain times of the month or year}}
+        {trai		{In Training}	{The person's employment is expected to be short term unless his performance during an initial training period justifies a longer term}}
+        {othr		{Other}		{The person's employment type does not fit in any other category}}
+    }}
+    {payrate		{Pay Rate}		{Pay}		{Pay amount (as defined by Pay Type)}}
+    {paytyp		{Pay Type}		{Pay Typ}	{Method by which pay rate is calculated} {
+        {basebon	{Base + bonus}		{Hourly pay rate regularly consists of a fixed base, plus a bonus based on performance}}
+        {commis		{Commission}		{Pay is computed as a percentage of sales or profits}}
+        {hourly		{Straight Hourly}	{Pay is computed as a fixed amount per hour worked}}
+        {weekly		{Weekly Salary}		{Pay is computed as a fixed amount per week worked}}
+        {monthly	{Monthly Salary}	{Pay is computed as a fixed amount per month worked}}
+        {annual		{Annual Salary}		{Pay is computed as a fixed amount per year worked}}
+        {piece		{Piecework}		{Pay is computed based on the amount or number of items produced by the employee}}
+    }}
+    {superv		{Supervisor}		{Superv}	{ID of the employee who is this employee's supervisor}}
+    {ssn		{SS Number}		{SSN}		{Social Security Number}}
+    {email		{Email}			{Email}		{The employee's email address}}
+    {mstat		{Marital Status}	{Mstat}		{Whether the employee is married (m) or single (s)} {
+        {m		{Married}		{The person is in a current marriage}}
+        {s		{Single}		{The person has never married or is divorced or is the survivor of a deceased spouse}}
+    }}
+    {eic		{IEC Status}		{EIC}		"Earned Income Credit status:\nIf the employee does not receive the earned income credit, leave this blank\nOtherwise, fill in the appropriate status"	{
+        {{}	None}
+        {sin	{Single or no Spouse Filing}}
+        {mar	{Married with Spouse Filing}}
+    }}
+    {wccode		{Workers Comp}		{Wcomp}		{Workers' Compensation classification code}}
+    {allow		{Allowances}		{Allow}		{Number of withholding allowances claimed by employee}}
+    {cmt		{Comment}		{Cmt}		{Other general comments about this employee}}
+    {username		{Username}		{User}		{The login name for this employee}}
+}
+
+tabtext empl_v 		{Employees}		{Empl}		{A view of the employee table with several additional helpful fields} {
+    {firstname		{First Name}		{Fstnam}	{The person's first name, or preferred name if specified}}
+    {formal		{Formal Name}		{Formal}	{The person's full name in a formal (Last, Given) format}}
+    {casual		{Casual Name}		{Casual}	{The person's full name in a casual (First Last) format}}
+    {supname		{Super Name}		{Supnam}	{The name of this employee's supervisor}}
+}
+
+tabtext empl_v_pub	{Employees}		{Empl}		{A list of employees with their non-confidential information}
+tabtext empl_v_sup	{Employees}		{Empl}		{A list of employees who report to the current user}

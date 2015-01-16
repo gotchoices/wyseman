@@ -1,0 +1,18 @@
+# Copyright Action Target Inc. all rights reserved
+#------------------------------------------
+tabtext priv		{Privileges}		{Privs}		{Privileges assigned to each employee ID} {
+    {priv		{Privilege}		{Priv}		{The name of the privilege being granted}}
+    {empl_id		{Employee ID}		{EmpID}		{The ID of the employee receiving the privilege}}
+    {alevel		{Access Level}		{Level}		{What level of access within this privilege (limit,user,super)} {
+        {limit	{Limited access (typically read-only)}}
+        {user	{Normal access for the user of this function (typically read-write)}}
+        {super	{Supervisor privilege (typically includes undo)}}
+    }}
+    {cmt		{Comment}		{Cmt}		{Comments about this privilege allocation to this employee}}
+}
+
+tabtext priv_v 		{Privileges}		{Privs}		{Privileges assigned to each employee ID} {
+    {formal		{Formal Name}		{Formal}	{The person's full name in a formal (Last, Given) format}}
+    {casual		{Casual Name}		{Casual}	{The person's full name in a casual (First Last) format}}
+    {username		{Username}		{User}		{The login name for this employee}}
+}

@@ -1,0 +1,18 @@
+#!/usr/bin/wish
+#include(Copyright)
+#Test erd.tcl widget
+package require wyseman
+
+#wm geometry . 500x600
+
+#sql::init -db wy1
+eval erd::erd .erd
+pack .erd -side left -fill both -exp 1
+.erd init
+
+eval .erd pref [pref::auto erd]		;#restore preferences
+wm protocol . WM_DELETE_WINDOW "eval pref::auto erd \[.erd pref\]; destroy ."
+
+focus .erd.c
+#update
+#.erd links

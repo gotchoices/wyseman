@@ -1,0 +1,25 @@
+#!/usr/bin/tclsh
+#include(Copyright)
+
+load libwyseman.so
+
+set str {This is a test macro(with some parameters) and something after}
+set res [macscan macro $str]
+puts "res:$res:"
+
+set str {This is a test macro(with some parameters)}
+set res [macscan macro $str]
+puts "res:$res:"
+
+set str {This is a test macro(another macro(another(abc)) inside) after}
+set res [macscan macro $str]
+puts "res:$res:"
+
+set str {This is a test macro() with no parameters}
+set res [macscan macro $str]
+puts "res:$res:"
+
+#This should generate an error:
+#set str {This is a test macro(with some parameters}
+#set res [macscan macro $str]
+#puts "res:$res:"

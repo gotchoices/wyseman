@@ -1,0 +1,198 @@
+#!/usr/bin/wishx
+#include(Copyright)
+#Calendar event scheduling manager
+set cnf(title) "Events Version 0.10"      ;#Sep 2005
+#TODO:
+#X- create standard view for event (event_v)
+#X- next date for standard/repeating items
+#X- place standard appointments on calendar
+#X- date/time selector widget
+#X- window to view/edit reminders
+#- create a function that returns all events within a date range (including repeating instances)
+#- place repeating items on calendar
+#- how to erase old appointments when scrolling calendar
+#- create view that shows only events I should know about (event_v_me)
+#- notify all who are invited to each event
+#- 
+#- LATER:
+#- day/week reports using lout or tk canvas -> postscript
+#- 
+
+set cnf(appname)	events
+package require wylib
+set cnf(table)		event_v_me		;#database table/view we read from
+
+#Preferences control array {tag title display_type user_edit}
+set cnf(pref) {\
+    -f {auto	chk	{Auto Launch Calendar:}	::cnf(auto)	-def 1 -help {Automatically launch calendar window when application starts}}\
+    -f {drem	ent	{Default Remind:}	::cnf(drem)	-def {15 minutes} -help {How many minutes in advance to set each appointment reminder by default}}\
+}
+
+set cnf(evente) { \
+    -dlr.pre event_pre_dlr -adr.pre event_pre_add -upr.pre event_pre_upr \
+    -m clr -m adr -m upr -m dlr -m prv -m rld -m nxt -m ldr -m sep\
+    -m {report	{Event Report}		{report_event %w}	{Generate a printout for the current event}}\
+    -m {close	{Event Completed}	{close_event %w}	{Mark the current event as completed} -s Close}\
+}
+
+set cnf(eventp)	{-selectmode extended\
+    -m clr -m rld -m def -m all -m prv -m sel -m nxt -m lby -m aex\
+    -m {todo	{Show TODO's}		-s Todo	{%w load -where {start isnull} -order next}	{Show all events with no start date}}\
+    -m {appt	{Show Appointments}	-s Appt	{%w load -where {not start isnull} -order next}	{Show all events with a valid start date}}\
+    -def {\
+        -where {{0.status eq open}} -order {nextdate starttime}\
+    }\
+    -disp {startdate startmin finishmin summary status nextdate event_id}\
+}
+
+set cnf(rminde) {event_remind_v_me -record {}\
+    -adr.pre rmind_pre_com -upr.pre rmind_pre_com \
+    -m clr -m adr -m upr -m dlr -m sep\
+}
+
+set cnf(rmindp)	{\
+    -m clr -m {rld -s {}} -m {lby -s {}} -m aex \
+    -disp {advance event_id}\
+}
+
+set cnf(emple) {event_empl_v_me -master {{m evente}}\
+    -adr.pre empl_pre_com -upr.pre empl_pre_com \
+    -m clr -m adr -m upr -m dlr -m sep\
+}
+
+set cnf(emplp) {-master {m evente}\
+    -m clr -m {rld -s {}} -m {lby -s {}} -m aex \
+    -disp {inv_id invite priv}\
+}
+
+# Do before adding a contact record
+#------------------------------------------
+proc event_pre_add {w} {
+    $w force summary
+    return ?
+}
+
+# Do before updating a contact record
+#------------------------------------------
+proc event_pre_upr {w} {
+    if {[$w get status] != {open}} {dia::err {Sorry, you can't modify closed records}; return 0}
+    $w force summary
+    return ?
+}
+
+# Do before deleting the contact record
+#------------------------------------------
+proc event_pre_dlr {w} {
+    if {[$w get status] != {open}} {dia::err {Sorry, you can't delete closed records}; return 0}
+    return 1
+}
+
+# Do before adding/updating a reminder
+#------------------------------------------
+proc rmind_pre_com {w} {
+    $w force advance
+    return ?
+}
+
+# Do before adding/updating an invited employe
+#------------------------------------------
+proc empl_pre_com {w} {
+    $w force inv_id
+    return ?
+}
+
+# Print out a report about the current event
+#------------------------------------------
+proc report_event {w} {
+    puts "Event report not yet implemented"
+}
+
+# Print a report about today's events
+#------------------------------------------
+proc report_day {w} {
+    puts "Current day report not yet implemented"
+}
+
+# Print a report about the current month
+#------------------------------------------
+proc report_month {w} {
+    puts "Current month report not yet implemented"
+}
+
+# Build the calendar view toplevel
+#------------------------------------------
+proc cal_update {z} {
+    global cnf
+    set min [$z.f min]
+    set max [$z.f max]
+#puts "Updating calendar items z:$z min:$min max:$max"
+    $z.f clear
+    foreach rec [sql::qlist "select own_id,seq,status,summary,objective,location,nextdate,startmin,finishmin from event_span('$min','$max') order by nextdate, starttime"] {
+#puts " rec:$rec"
+        lassign $rec own_id seq status summary objective location nextdate startmin finishmin
+        set lw [$z.f day $nextdate app ${own_id}-$seq -bg tan -text "$startmin $summary" -help "$nextdate:  $startmin - $finishmin\nLocation: $location\n$objective"]
+        bind $lw <Double-1> "m evente load {$own_id $seq}"
+    }
+}
+
+# Build the calendar view toplevel
+#------------------------------------------
+proc cal_build {z} {
+    top::add [eval cal::cal $z.f -command \{cal_update $z\}]
+    pack $z.f -fill both -exp 1
+    sql::listen "events_[user::uid]" "cal_update $z"
+} 
+
+# Construct the main window
+#----------------------------------------------------
+proc main_win {w} {
+    global cnf
+
+    set m [$w menu w]
+    $m mb tools -under 0 -help {Common helpful functions for this application}
+    $m tools mi cal {Calendar View} -under 0 -s Calendar -help {Open a view showing events placed on a calendar} -command "top::top {Calendar View:} cal -build {cal_build %w}" -before 1
+    $m tools mi day {Day Report} -under 0 -s Day -help {Print a report for the current day} -command "report_day $w" -before 1
+    $m tools mi mon {Month Report} -under 0 -s Month -help {Print a report for the current month} -command "report_month $w" -before 1
+
+    $m mb links -under 0 -help {Windows allowing entry/editing of other contacts linked to events}
+    $m links mi empl {Employee Links} -under 0 -s Empl -help {Allows including (inviting) other employees to events} -command "top::top {Emplim Links:} empl -build {top::dbep %w \$::cnf(emple) \$::cnf(emplp)}"
+#    $m links mi cont {Contact Links}  -under 0 -s Cont -help {Allows including customer contacts to events}	-command "top::top {Conim Links:} empl  -build {top::dbep %w \$::cnf(conte) \$::cnf(contp)}"
+#    $m links mi vend {Vendor Links}   -under 0 -s Vend -help {Allows including vendor contacts to events}	-command "top::top {Vendim Links:} empl -build {top::dbep %w \$::cnf(vende) \$::cnf(vendp)}"
+#    $m links mi pers {Personal Links} -under 0 -s Pers -help {Allows including personal contacts to events}	-command "top::top {Persim Links:} empl -build {top::dbep %w \$::cnf(perse) \$::cnf(persp)}"
+
+    frame $w.er
+    pack $w.er -side top -fill both
+    
+    top::add [eval dbe::dbe $w.er.e -pwidget $w.p $cnf(table) $cnf(evente) [list -slaves "$w.er.r.p {empl p}"]] evente
+    pack $w.er.e -side left -fill both
+    
+    frame $w.er.r
+    pack $w.er.r -side left -fill both -exp 1
+    
+    top::add [eval dbe::dbe $w.er.r.e -pwidget $w.er.r.p $cnf(rminde) -master $w.er.e] rminde
+    $w.er.r.e field advance entry configure -init \$::cnf(drem)
+    pack $w.er.r.e -side top -fill both
+    
+    top::add [eval dbp::dbp $w.er.r.p -ewidget $w.er.r.e $cnf(rmindp)] rmindp
+    pack $w.er.r.p -side top -fill both -expand yes
+
+    top::add [eval dbp::dbp $w.p -ewidget $w.er.e $cnf(eventp)] eventp
+    pack $w.p -side top -fill both -expand yes
+}
+
+# main
+#----------------------------------------------------
+priv::runcheck
+eval pref::init $cnf(pref)
+set w [top::top $cnf(appname) m main_win]
+
+prargs $argv {
+    -load	{m e load {%v}}
+    -rep	{m e menu menu invoke report}
+}
+
+m eventp menu menu invoke def
+if {$cnf(auto)} {
+    update
+    m menu tools invoke cal
+}
