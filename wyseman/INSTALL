@@ -1,0 +1,33 @@
+Wyseman includes an executable that can be run in a variety of modes
+to help you build and maintain a PostgreSQL database schema.
+
+For running the executable, you need to make sure it is installed somewhere
+in your PATH.  The Makefile will install in /usr/local/bin by default.
+You can set the environment variable WYBIN to something else and the
+Makefile should pick that up.
+
+-----------------------------------------------------------------------
+Additionally, wyseman includes a run-time loadable Tcl library that can be
+included by a Tcl application to access the database's data dictionary.
+
+To access the Tcl library, it must be installed in a directory that is part
+of your TCLLIBPATH variable (usually defaults to /usr/lib or /usr/share).
+
+If you run (as root)
+
+    "make install" 
+    
+in the current directory, it should install the executable in 
+/usr/local/bin and the run-time library under /usr/lib.  If you set the
+environment variable WYLIB to some directory, the run-tine library will
+be installed there.
+
+-----------------------------------------------------------------------
+Optionally, wyseman can also create a run-time loadable Tcl library that
+provides default view information (like how to display the fields of
+a table in a multi-editing widget).
+
+This library can be built using the "make lib" option (as long as you 
+have properly authored .wmd files in your schema directory).
+
+See the description for .wmd files in the README for more information.

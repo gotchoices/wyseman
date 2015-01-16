@@ -1,0 +1,29 @@
+This sample schema definition is for use with the sample employee database 
+application and shared calendar application.
+
+To run the sample applications, do the following:
+  
+  Make sure Wylib is installed 		(see INSTALL in wylib source dir)
+  Make sure Wyseman is installed	(see INSTALL in wyseman source dir)
+  Make sure PostgreSQL is installed	(see PostgreSQL documentation)
+  Make sure libpgtcl is installed	(the Tcl API to access PostgreSQL)
+
+  In the schema directory do:
+
+(as dbadmin user)
+    dropdb wyatt		#only if it already exists
+    make build			#build database from schema
+    make text			#install language definitions in database
+    make lib			#make default run-time library
+
+(as dbadmin user)
+  Run the kickstart script in the wylib source dir to install first user    
+  
+(as first user)
+  Run the "events" script to see a simple calendar application
+
+  Run the "emplim" script to add new employees to your enterprise.
+  You can grant privileges to users with the option in the Tools menu.
+
+  The "eim" program is an employee directory showing only limited 
+  information so it is suitable for use by all users.

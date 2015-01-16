@@ -1,0 +1,152 @@
+#!/usr/bin/wish
+#A Graphical Interface for a wyseman-managed database
+#include(Copyright)
+set cnf(title) "Wyseman Graphical Interface"      ;#Dec 2009
+#TODO:
+#- 
+package require wyselib
+
+#Preferences control array {tag title display_type user_edit}
+set cnf(pref)  {\
+    -f {ewid	ent	{Entry Width:	}	::cnf(ewid)	-def 24 -help {The standard width for data field entries} -width 10}\
+}
+
+set cnf(esm)	{-m clr -m adr -m upr -m dlr -m prv -m rld -m nxt -m {ldr -s Ld} -m sep}
+set cnf(psm)	{-m clr -m def -m rld -m all -m prv -m sel -m nxt -m lby -m see -m aex}
+
+set cnf(tablp)	{-table wm.table_pub \
+    -m clr -m def -m rld -m all -m prv -m sel -m nxt -m squ -m lby -m aex\
+    -m {view {See Views Only} -command {%w load -where "tab_kind = 'v'"} -s {Views} -help {Load the preview with all objects which are views (not native tables)}}\
+    -m {cols {Show Columns} -command {m cols load -where "obj = '[$w get obj]'"} -s {Show} -help {Load the active column preview with all columns which belong to the highlighted table}}\
+    -def {-where {{0.tab_kind eq r}} -order obj}\
+    -disp {obj tab_kind columns title help}\
+}
+
+# Open an editing pane if not already open
+#----------------------------------------------------
+proc open_edit {p table} {
+    set tag [translit . _ $table]
+    if {[catch "edit_$tag e w"]} {
+        top::top edit_$tag -title {Edit $table:} -build "edit_win %w $p $table" -reopen 0 -parent $p
+    }
+    return $tag
+}
+
+# When executing a line in a table preview
+#----------------------------------------------------
+proc exec_edit {p table id {idx {}}} {
+    set tag [open_edit $p $table]
+    edit_$tag e load $id
+}
+
+# Construct a table edit window
+#----------------------------------------------------
+proc edit_win {w p table} {
+    global cnf
+#puts "edit_win w:$w p:$p table:$table"
+    set m [$w menu w]
+    $m mb tools -under 0 -help {Common helpful functions for this application}
+
+    if {$cnf(tab_kind.$table) == {v}} {
+        top::add [dbe::dbe $w.e -table $table -pwidget $p {*}$cnf(esm)] e
+    } else {
+        top::add [dbe::dbe $w.e -table $table -pwidget $p {*}$cnf(esm) {*}$cnf(eflist.$table)] e
+    }
+    pack $w.e -side top -fill both -expand yes
+    return 1
+}
+
+# Construct a table preview window
+#----------------------------------------------------
+proc build_prev {w table} {
+    global cnf
+
+    set m [$w menu w]
+    $m mb tools -under 0 -help {Common helpful functions for this application}
+#    $m tools mi oped {Editing Pane} -under 0 -s {Edit -bg lightgreen -gmc {-fill x -exp 1}} -help {Open an editing pane linked to this preview} -command "top::top edit_$table -title {Edit $table:} -build {edit_win %w $w.p $table} -reopen 1"
+
+    init_table $table
+    top::add [dbp::dbp $w.p -table $table -selectmode extended \
+        -update {*} -exec "exec_edit $w.p $table" \
+        {*}$cnf(psm) \
+        -m [list edit {Editing Window} "open_edit $w.p $table" -s {Edit -bg lightgreen} -help {Open an editing window for this table (if not already open)}]\
+        {*}$cnf(pflist.$table)\
+    ] p
+    pack $w.p -side top -fill both -expand yes
+    return 1
+}
+
+# Construct an ERD window
+#----------------------------------------------------
+proc build_erd {w} {
+    top::add [erd::erd $w.erd] erd
+    pack $w.erd -side left -fill both -exp 1
+    $w.erd init
+    focus $w.erd.c
+    return 1
+}
+
+# Load up information for building a dbp and a dbe for the table
+#----------------------------------------------------
+proc init_table {table {force 0}} {
+    global cnf
+    if {!$force && [info exists cnf(pk.$table)]} return
+#puts "init_table: $table"
+    set cnf(eflist.$table) {}
+    set cnf(pflist.$table) {}
+    lassign [sql::one "select title,tab_kind,help from wm.table_pub where obj = '$table'"] cnf(title.$table) cnf(tab_kind.$table) cnf(help.$table)
+    foreach rec [sql::qlist "select field,col,title,type,length,pkey,help from wm.column_pub where obj = '$table' order by field;"] {
+        lassign $rec field col title type length pkey help
+        lappend cnf(pflist.$table) -f [list $col $title -help $help]
+        if {$type == {bool}} {set et {chk}} else {set et {ent}}
+        lappend cnf(eflist.$table) -f [list $col -style $et -size $cnf(ewid) -state normal -write 1 -hide 0 -spf {} -opt 0 -sub "0 $field" -title $title -help $help]
+        if {$pkey == {t}} {lappend cnf(pk.$table) $col}
+    }
+    if {[info exists cnf(pk.$table)]} {
+        lappend cnf(plist) -primary $cnf(pk.$table)
+#        set cnf(pk.$table) {oid}
+#        lappend cnf(eflist.$table) -f [list oid -style ent -size 12 -sub "1 0" -hide 1]
+    }
+#debug cnf(eflist.$table)
+#debug cnf(pflist.$table)
+}
+
+# When executing a line in the general tables preview
+# Load up information for building a dbp and a dbe for the table
+#----------------------------------------------------
+proc exec_table {table} {
+    global cnf
+#puts "exec_table: $table"
+    set obj [join $table .]
+    init_table $obj 1
+    top::top [translit . _ prev_$obj] -title "Preview $cnf(title.$obj):" -build "build_prev %w $obj" -reopen 1
+}
+
+# Construct the main window
+#----------------------------------------------------
+proc main_win {w} {
+    global cnf
+
+    set m [$w menu w]
+    $m mb tools -under 0 -help {Common helpful functions for this application}
+    $m tools mi ents {Entity View/Edit} -under 0 -s {Entities} -help {Open a top level window to show all entities in the system} -command "top::top base -title {Entities:} -build {base::build %w} -reopen 1"
+    $m tools mi erd  {Entity Relation Diagram} -s {ERD} -help {Launch a graph of the way the various tables relate to each other (an ERD)} -command "top::top erd -title {Entity Relations:} -build {build_erd %w} -reopen 1"
+
+    top::add [eval dbp::dbp $w.p -exec exec_table $cnf(tablp)] tablp
+    pack $w.p -side top -fill both -expand yes
+    return 1
+}
+
+# Main
+#----------------------------------------------------
+#priv::runcheck
+eval pref::init $cnf(pref)
+set w [top::top m main_win -main 1]
+
+argform {load} argv
+argnorm {{load 1} {macro 1}} argv
+prargs $argv {
+    -load	{m table load {%v}}
+    -macro	{if {[catch {%v} msg]} {dia::err "In command line macro: %v\n\nMessage:\n$msg"}}
+}
+m tablp menu menu invoke def

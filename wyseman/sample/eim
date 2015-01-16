@@ -1,0 +1,82 @@
+#!/usr/bin/wishx
+#include(Copyright)
+#A stripped down viewer for the employee records, available to all users
+set cnf(title) "Eim Version 0.50"      ;#Jul 2004
+#TODO:
+#- 
+
+set cnf(appname)	eim
+package require wylib
+
+#Preferences control array {tag title display_type user_edit}
+set cnf(pref)  {\
+    -f {myext	ent	{Telephone Extension:}	::cnf(myext)	-help {The extension number of your office phone} -width 4}\
+    -f {mailcd	ent	{Email Command:}	::cnf(mailcmd)	-def {/usr/bin/mozilla -remote \"mailto(%s)\"} -help {Command to use to send email} -width 40}\
+}
+
+set cnf(empe)	{empl_v_pub \
+    -m clr\
+    -m {dial Dial -command {phone_dial %w} -hotkey {<Alt-k>} -s {Dial} -help "Dial the phone number for this person\nHot key: Alt-k"}\
+    -m {email Email -command {lib::email [%w get username]} -s {Email} -hotkey {<Alt-m>} -help {Start an email to this person}}\
+}
+
+set cnf(empp)	{{Employees:}\
+    -where	{status = 'active'}\
+    -order	{surname givnames}\
+    -m clr -m rld -m lod\
+    -m prv -m sel -m nxt\
+    -m lby -m ald\
+    -disp {formal jobtitle workph mobile supname}\
+}
+
+#Dial the phone
+#------------------------------------------
+proc phone_dial {w} {
+    puts "Not implemented in this version."
+}
+
+# Make an organizational chart with the current employee as the head
+#----------------------------------------------------
+proc org_chart {w} {
+    proc org {sup {pre {}}} {
+        set dat {}
+        foreach rec [sql::qlist "select empl_id,name_empl(empl_id),jobtitle from empl_v_sup where status in ('active','proba') and superv = $sup and superv != empl_id order by 2"] {
+            lassign $rec empl_id empl_name title
+            append dat "[format "%s%-30.30s %s\n" $pre $empl_name $title]"
+            append dat [org $empl_id "${pre}|   "]
+        }
+        return $dat
+    }
+    set e [m e w]
+    set dat "Organizational Chart:\nPrinted: [date::date]\n\n"
+    append dat "[format "%-30.30s %-40.40s\n" [$e get formal] [$e get jobtitle]]"
+    append dat [org [$e get empl_id] {    }]
+    edwin::edwin .orgchart -init yes -dest dat -abort Dismiss -commit {} -geom {800x600}
+}
+
+# Construct the main window
+#----------------------------------------------------
+proc main_win {w} {
+    global cnf
+
+    set m [$w menu w]
+    $m mb tools -under 0 -help {Common helpful functions for this application}
+    $m tools mi org {Organization Chart} -under 0 -s Org -help {Show the chain of command under the current employee} -command "org_chart $w" -before 1
+
+    top::add [eval dbe::dbe $w.e -pwidget $w.ep.p $cnf(empe) -bg blue -bd 3]
+    pack $w.e -side top -fill both
+
+    top::add [eval dbp::dbp $w.p -ewidget $w.e $cnf(empp) -load 1]
+    pack $w.p -side top -fill both -expand yes
+}
+
+# main
+#----------------------------------------------------
+priv::runcheck
+eval pref::init $cnf(pref)
+#itel::init -ext $cnf(myext) -notify no	;#init phone system connection
+set w [top::top $cnf(appname) m main_win]
+
+prargs $argv {
+    -load	{m e load %v}
+}

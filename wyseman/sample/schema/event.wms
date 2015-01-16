@@ -1,0 +1,393 @@
+#Tables to contain calendaring information
+#include(Copyright)
+#TODO:
+#- 
+
+set fields(event.pk) {own_id seq}
+set fields(event.in) {status summary objective location outcome startdate starttime length deadline count repeat busy until category priority}
+set fields(event.up) [concat $fields(event.pk) $fields(event.in)]
+set fields(event.se) [concat $fields(event.up) created lastmod mod_id closed see_ids]
+
+set fields(event_v.se) [concat $fields(event.se) event_id start startmin finish finishdate finishtime finishmin owner nextdate]
+
+set fields(event_remind.pk) {own_id seq advance}
+set fields(event_remind.se) {own_id seq advance}
+set fields(event_remind.up) {advance}
+set fields(event_empl.pk) {own_id seq inv_id}
+set fields(event_empl.up) {inv_id priv}
+set fields(event_empl.se) [concat $fields(event_empl.pk) priv]
+
+#View rules only for people who have write priv to an event
+proc rule_insert_event {view table fields}		{return [rule_insert $view $table $fields		{where exists (select * from event_v_priv ep where ep.own_id = new.own_id and ep.seq = new.seq and ep.epriv = 'write')}]}
+proc rule_update_event {view table upfields pkfields}	{return [rule_update $view $table $upfields $pkfields	{where exists (select * from event_v_priv ep where ep.own_id = old.own_id and ep.seq = old.seq and ep.epriv = 'write')}]}
+proc rule_delete_event {view table pkfields}		{return [rule_delete $view $table $pkfields		{where exists (select * from event_v_priv ep where ep.own_id = old.own_id and ep.seq = old.seq and ep.epriv = 'write')}]}
+
+#Holds one item for each appointment, todo, event, etc.
+#----------------------------------------------------------------
+table event {empl curr_uid()} {
+    own_id	int4 default curr_uid() references empl (empl_id) on update cascade on delete cascade,
+    seq		int4,			-- A small integer, generate as max+1 for given own_id
+
+ -- When open, the event can be edited, and repeat dates can exist for it
+ -- Once closed, the event is locked for historical documentation.
+    status	varchar(8) not null default 'open' CHECK (status in ('open', 'clsd')),
+    
+    summary	varchar(50) not null,	-- Short description
+    objective	varchar,		-- A longer description
+    location	varchar,
+    outcome	varchar,		-- Comments edited at close time
+
+    startdate	date,			-- An event with no start date is a "todo" and should be prioritized by deadline date
+    starttime	time,			-- An event with no start time is an all-day event
+    length	interval,		-- duration of the event
+    deadline	date,			-- Events with no start date (todo's) and no deadline, should show up at the top of the priority list
+
+    count	int4 default 1 CHECK (count > 0),
+    repeat	varchar(8) not null default 'none' CHECK (repeat in ('none', 'day', 'week', 'month', 'monthday', 'year')),
+    busy	varchar(4) not null default 'busy' CHECK (busy in ('busy', 'free')),
+    until	date,		-- should be null if repeat is none, if non-null, trigger should insert instances in event_repeat for each repetition
+
+    category	varchar(12),
+    priority	int4 not null default 5 CHECK (priority > 0 and priority < 10),
+
+    created	timestamp(0) not null default current_timestamp,
+    lastmod	timestamp(0) not null default current_timestamp,
+    mod_id	int4 default curr_uid() references empl (empl_id) on update cascade on delete cascade,
+    closed	timestamp(0),		-- When marked as clsd (trigger)
+
+    see_ids	int4[],		-- A cached array of empl_id's of people invited to this meeting.  Owner is always element 0.
+    primary key (own_id, seq)
+}
+foreach f {startdate status deadline} {index {} event $f}
+
+# Contains a record for each reminder of an appointment
+#----------------------------------------------------------------
+table event_remind {event} {
+    own_id	int4 not null,		-- The event the repetition refers to
+    seq		int4 not null,
+    advance	interval not null,	-- how far in advance to remind you
+
+    primary key (own_id, seq, advance),
+    foreign key (own_id, seq) references event on update cascade on delete cascade
+}
+
+# Associate (invite) another user to an event
+#----------------------------------------------------------------
+table event_empl {event empl} {
+    own_id	int4,			-- The event this association refers to
+    seq		int4,
+
+ -- The person you have invited to this event
+    inv_id	int4 not null references empl (empl_id) on update cascade on delete cascade,
+
+    priv	varchar(8) not null CHECK (priv in ('none', 'read', 'option', 'write')),
+    
+    primary key (own_id, seq, inv_id),
+    foreign key (own_id, seq) references event on update cascade on delete cascade
+}
+index {} event_empl priv
+
+# Calculate the next date (occurring after aft_date) for a repeating event
+#----------------------------------------------------------------
+function {event_next(repeat_count int4, repeat_type varchar, start_date date, end_date date, aft_date date)} {} {
+  returns date stable language plpgsql as $$
+    declare
+        nxt	date := start_date;
+        ts	date := start_date;
+        mth	int4;			-- m-th n-day of month
+    begin
+--        nxt := start_date;		-- start out with original start date
+
+        if repeat_type = 'monthday' then	-- special algorithm for m'th n-day (i.e. 2nd Wednesday) of month:
+            mth := (date_part('day', start_date)::int4 - 1) / 7 + 1;
+--          raise exception 'Dow: % mth: %', dow, mth;		-- for debugging
+
+            while nxt < aft_date or (date_part('day', nxt)::int4 - 1) / 7 + 1 != mth loop		-- loop until we find the m'th n-day
+                ts := nxt + '1 week'::interval;
+                if ts > end_date then	-- if this would exceed the end date
+                    return ts;		-- return the last value
+                end if;
+                nxt := ts;		-- else keep going
+            end loop;
+
+        else				-- algorithm for regular repeats:        
+            while nxt < aft_date loop	-- loop until later or equal to target
+                ts := nxt + (repeat_count::varchar || repeat_type)::interval;		-- increment date
+                if ts > end_date then	-- if this would exceed the end date
+                    return ts;		-- return the last value
+                end if;
+                nxt := ts;		-- else keep going
+            end loop;
+        end if;
+        return ts;			-- return next repeat date
+    end;
+$$;}
+
+# Return a set of my events within a given datespan
+#----------------------------------------------------------------
+function {event_span(start_date date, end_date date)} {event_v_me} {
+  returns setof event_v_me language plpgsql as $$
+    declare
+        erec	record;		-- event record
+    begin
+        -- return all non-repeating events inside the inverval
+        for erec in select * from event_v_me where repeat = 'none' and startdate between start_date and end_date loop
+            return next erec;
+        end loop;
+
+        -- now calculate repeating occurrences inside the interval
+        for erec in select * from event_v_me where repeat != 'none' and event_next(count,repeat,startdate,until,start_date) between start_date and end_date loop
+            erec.nextdate := event_next(erec.count,erec.repeat,erec.startdate,erec.until,start_date);
+            return next erec;				-- include this occurance
+            while erec.nextdate <= end_date loop	-- find any more occurrances within the interval
+                erec.nextdate := event_next(erec.count, erec.repeat, erec.nextdate, null, date(erec.nextdate + '1 day'::interval));
+                if erec.nextdate > erec.until then	-- it's past the event's last date
+                    exit;				-- we're done
+                end if;
+                if erec.nextdate <= end_date then	-- it's within the desired interval
+                    return next erec;			-- include it
+                end if;
+            end loop;
+        end loop;
+        return;
+    end;
+$$;}
+
+# Base view with additional helpful columns
+#----------------------------------------------------------------
+view event_v {event event_next(int4,varchar,date,date,date) empl_name(int4)} {
+    select
+        eval(fld_list $fields(event.se)),
+
+        own_id || '-' || seq as event_id,
+        startdate + starttime as start,
+        to_char(startdate + starttime, 'HH12:MI am') as startmin,
+        startdate + starttime + length as finish,
+        (startdate + starttime + length)::date as finishdate,
+        starttime + length as finishtime,
+        to_char(startdate + starttime + length, 'HH12:MI am') as finishmin,
+        empl_name(own_id) as owner,
+
+        case when startdate is null then
+            deadline
+        when repeat = 'none' then
+            startdate
+        else
+            event_next(count,repeat,startdate,until,current_date)
+        end as nextdate,
+        
+        oid as _oid from event ev;
+}
+
+# View that shows the effective privileges various users have for each event
+#----------------------------------------------------------------
+view event_v_priv {event event_empl} {
+    select ev.own_id,ev.seq,inv_id,
+        case when ev.status = 'open' then ee.priv when ee.priv = 'none' then 'none' else 'read' end as epriv,
+        empl_name(own_id) as owner, empl_name(inv_id) as invite
+        from event ev join event_empl ee using (own_id, seq)
+    union
+    select own_id,seq,own_id as inv_id,
+        case when status = 'open' then 'write' else 'read' end as epriv,
+        empl_name(own_id) as owner, empl_name(own_id) as invite
+        from event;
+} -grant public
+
+# View that shows only appointments the current user should know about
+#----------------------------------------------------------------
+view event_v_me {event_v event_v_priv} {
+    select eval(fld_list $fields(event_v.se) ev) from event_v ev where 
+        curr_uid() = any (ev.see_ids);
+
+    eval(rule_insert event_v_me event $fields(event.in))    -- anyone can insert a new event
+    eval(rule_update_event event_v_me event $fields(event.in) $fields(event.pk))	-- don't allow to update PK fields
+    eval(rule_delete_event event_v_me event $fields(event.pk))
+} -grant {
+    {events	s {i u d}}
+}
+
+# Base view with additional helpful columns
+#----------------------------------------------------------------
+view event_remind_v {event_remind} {
+    select
+        eval(fld_list $fields(event_remind.se)),
+        own_id || '-' || seq as event_id,
+        oid as _oid from event_remind;
+}
+
+# View of reminders only for events I belong to
+#----------------------------------------------------------------
+view event_remind_v_me {event_remind_v event_v_me event_v_priv} {
+    select t.* 
+        from event_remind_v t, event_v_me ev
+        where t.own_id = ev.own_id and t.seq = ev.seq;
+
+    eval(rule_insert_event event_remind_v_me event_remind $fields(event_remind.se))
+    eval(rule_update_event event_remind_v_me event_remind $fields(event_remind.up) $fields(event.pk))	-- don't allow to update own_id, seq
+    eval(rule_delete_event event_remind_v_me event_remind $fields(event_remind.pk))
+} -native {
+    {event_remind own_id seq}
+} -grant {
+    {events	s {i u d}}
+}
+
+# Base view with additional helpful columns
+#----------------------------------------------------------------
+view event_empl_v {event_empl} {
+    select
+        eval(fld_list $fields(event_empl.se)),
+        own_id || '-' || seq as event_id,
+        empl_name(inv_id) as invite,
+        oid as _oid from event_empl;
+}
+
+# View with proper access rights
+#----------------------------------------------------------------
+view event_empl_v_me {event_empl_v event_v_me event_v_priv} {
+    select t.* 
+        from event_empl_v t, event_v_me ev
+        where t.own_id = ev.own_id and t.seq = ev.seq;
+
+    eval(rule_insert_event event_empl_v_me event_empl $fields(event_empl.se))
+    eval(rule_update_event event_empl_v_me event_empl $fields(event_empl.up) $fields(event.pk))	-- don't allow to update own_id, seq
+    eval(rule_delete_event event_empl_v_me event_empl $fields(event_empl.pk))
+} -native {
+    {event_empl own_id seq}
+} -grant {
+    {events	s {i u d}}
+}
+
+#Call notify, but with a variable signal name
+#----------------------------------------------------------------
+function event_notify(text,int4) {} {
+  returns varchar as '
+    spi_exec "notify ${1}_${2}"
+  ' language 'pltcl';
+}
+
+# Before inserting a new event
+#----------------------------------------------------------------
+function event_bi_tf() {event curr_uid() event_notify(text,int4)} {
+  returns trigger security definer as '
+    begin
+        if new.seq is null then
+            select into new.seq coalesce(max(seq),0)+1 from event where own_id = new.own_id;
+        end if;
+        new.see_ids[0]	:= new.own_id;			-- Owner always invited
+        perform event_notify(\'events\', new.own_id);
+        return new;
+    end;
+  ' language 'plpgsql';
+}
+trigger event_bi_tr {} {
+    before insert on event for each row execute procedure event_bi_tf();
+}
+
+# Before updating an event
+#----------------------------------------------------------------
+function event_bu_tf() {event curr_uid() event_notify(text,int4)} {
+  returns trigger as '
+    begin
+        if old.status = \'clsd\' then			-- Do not update a closed record
+            raise exception \'!event.RAC\';		-- Record already closed
+            return null;
+        end if;
+        if old.status = \'open\' and new.status = \'clsd\' then
+            new.closed		:= current_timestamp(0);
+        end if;
+        new.lastmod		:= current_timestamp(0);
+        new.mod_id		:= curr_uid();
+        perform event_notify(\'events\', new.own_id);
+        return new;
+    end;
+  ' language 'plpgsql';
+}
+trigger event_bu_tr {} {
+    before update on event for each row execute procedure event_bu_tf();
+}
+
+# Before deleting
+#----------------------------------------------------------------
+function event_bd_tf() {event event_notify(text,int4)} {
+  returns trigger as '
+    begin
+        perform event_notify(\'events\', old.own_id);
+    end;
+  ' language 'plpgsql';
+}
+trigger event_bd_tr {} {
+    before delete on event for each row execute procedure event_bd_tf();
+}
+
+# Before insert or update on an event
+#----------------------------------------------------------------
+function event_biu_tf() {event} {
+  returns trigger as '
+    begin
+        if new.repeat = \'none\' then
+            new.count := null;
+        elsif new.count isnull then
+            new.count := 1;
+        end if;
+        if new.starttime is not null then
+            if new.startdate is null then
+                new.startdate = today;
+            end if;
+            if new.length is null then
+                new.length = \'1 hour\';
+            end if;
+        end if;
+        return new;
+    end;
+  ' language 'plpgsql';
+}
+trigger event_biu_tr {} {
+    before insert or update on event for each row execute procedure event_biu_tf();
+}
+
+# On insert or update for event_empl
+#----------------------------------------------------------------
+function event_empl_biu_tf() {event_empl} {
+  returns trigger as '
+    begin
+        if new.inv_id = new.own_id then			-- Can not invite yourself to your own meeting
+            raise exception \'!event_empl.IID\';	-- Illegal invited user ID
+            return null;
+        end if;
+        return new;
+    end;
+  ' language 'plpgsql';
+}
+trigger event_empl_biu_tr {} {
+    before insert or update on event_empl for each row execute procedure event_empl_biu_tf();
+}
+
+# Produce an array of people invited to a given event (including the owner)
+# Usage: event_upd_ids(own_id, seq)
+#----------------------------------------------------------------
+function event_ids_list(int4,int4) {event_empl} {
+  returns int4[] stable as '
+      select coalesce(
+        array_prepend($1, array(select inv_id from event_empl where own_id = $1 and seq = $2 and priv != \'none\' order by 1)),
+        array[$1]
+      );
+  ' language 'sql';
+}
+
+# After inserting or updating or deleting an event_empl
+#----------------------------------------------------------------
+function event_empl_aiu_tf() {event_empl} {
+  returns trigger security definer as '
+    begin
+        if TG_OP = \'DELETE\' then
+            update event set see_ids = event_ids_list(old.own_id, old.seq) where own_id = old.own_id and seq = old.seq;
+        else
+            update event set see_ids = event_ids_list(new.own_id, new.seq) where own_id = new.own_id and seq = new.seq;
+        end if;
+        return new;
+    end;
+  ' language 'plpgsql';
+}
+trigger event_empl_aiud_tr {} {
+    after insert or update or delete on event_empl for each row execute procedure event_empl_aiu_tf();
+}

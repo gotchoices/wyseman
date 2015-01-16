@@ -1,0 +1,411 @@
+#!/usr/bin/tclsh
+#Manage database schema based on wyseman description files
+#---------------------------------------
+#include(Copyright)
+#TODO:
+#X- allow for mode to do the whole drop/restore in a transaction
+#- better include/exclude logic:
+#  <!>[name objname*]	&&/||
+#  <!>[branch objname*]	&&/||
+#  <!>[file filename*]	&&/|| 
+#  <!>[type view|table|index|...]
+#- 
+package require wylib
+package require wyseman
+
+set cnf(oper)		{list}
+set cnf(tincl)		{}		;#object types to include
+set cnf(texcl)		{}		;#or exclude
+set cnf(nincl)		{}		;#object names include
+set cnf(nexcl)		{}		;#object names exclude
+set cnf(fincl)		{}		;#filenames to include
+set cnf(fexcl)		{}		;#or exclude
+set cnf(branch)		{}		;#only this object and its descendents (the things that use it)
+set cnf(dry)		0		;#dry run, don't execute sql
+set cnf(crtab)		{}		;#create summary tables ({} = auto)
+set cnf(trans)		0		;#execute all commands as a single transaction
+set cnf(sqltrans)	{}		;#accumulates sql for final transaction
+set cnf(debug)		0		;#print out SQL
+set cnf(repl)		0		;#replace functions (no drop)
+set cnf(db)		{wyatt}
+set cnf(host)		{}
+set cnf(warn)		{1}
+set cnf(orph)		{1}
+set cnf(wmdlib)		{}
+set cnf(wmdlibdir)	{}
+set cnf(wmdlibver)	{1.0}
+set cnf(dext)		{d}		;#data file extension
+set cnf(sext)		{s}		;#sql file extension
+set cnf(cext)		{c}		;#record count file extension
+set cnf(workdir)	{}
+
+# Process a defs structure as found in a .wmd file, but merge in any
+# inheritances and return a similar structure merged line by line
+#------------------------------------------
+proc inherit {code} {
+    argnorm {{fields 3} {inherits 3}} code
+    set inher [xswitchs inherits code]	;#do we inherit any other structures
+    if {$inher == {}} {return $code}	;#if not, return code unchanged
+    
+    set idefs [inherit [wmparse::tabdef $inher]]	;#get inherited defaults (recursively)
+
+    set oargs {}			;#accumulate non-field arguments
+    set tags {}				;#keep track of tags we use
+    foreach xargs [list $idefs $code] {		;#inherited and then local
+        set fargs [xswitchs fields xargs]	;#get field arguments
+        eval lappend oargs $xargs		;#remaining "other" arguments
+        foreach fa $fargs {
+            set fa [lassign $fa tag]		;#extract tag
+            if {![lcontain $tags $tag]} {lappend tags $tag}	;#keep list of tags
+#            argform {style size sub} fa		;#add switch names to all args
+            eval lappend ca($tag) $fa		;#append them to our list
+#puts "lappend ca($tag) $fa"
+        }
+    }
+
+    set fields {}; foreach tag $tags {
+        lappend fields [concat $tag $ca($tag)]
+    }
+
+    return "$oargs -fields {$fields}"
+}
+
+# Output a set of tcl library files containing table defaults
+#------------------------------------------
+proc make_lib {} {
+    global cnf
+    if {![file exists $cnf(wmdlibdir)]} {file mkdir $cnf(wmdlibdir)}
+    foreach rec [wmparse::family {} defs] {
+        lassign $rec lev obj name code
+        if {![lcontain {table view} $obj] || $code == {}} continue	;#can only exist for tables/views
+        set code [inherit $code]
+#puts "name:$name code:$code"
+        set drop [xswitchs drop code]		;#any fields we should exclude
+        set fargs [xswitchs fields code]	;#grab the field arguments from code
+        set tags {}
+        set out "#Automatically generated script--do not edit\npackage provide $cnf(wmdlib) $cnf(wmdlibver)\nnamespace eval $cnf(wmdlib) \{\n  namespace export $name  \n"
+        append out "  proc $name {{tag {_}}} \{\n"
+        append out "    switch \$tag \{\n"
+        append out "      {} {return {$code}}\n"
+        foreach fa $fargs {
+            set fa [lassign $fa tag]
+            if {[lcontain $drop $tag]} continue
+            lappend tags $tag
+            argform {style size sub} fa		;#add switch names to all args
+#puts "tag:$tag fa:$fa"
+            append out [format "      %-16s {return {%s}}\n" $tag $fa]
+        }
+#puts "tags:$tags"
+        append out "      {_} {return {$tags}}\n"
+        append out "    \}\n  \}\n\}\n"		;#end switch,proc,namespace
+        write_file [file join $cnf(wmdlibdir) $name.tcl] $out
+    }
+#    system "cd $cnf(wmdlibdir); make"
+}
+
+# Either execute the query or save it for later (depending on -trans switch)
+#------------------------------------------
+proc exorsave {sql} {
+    global cnf
+    if {$cnf(trans)} {
+        append cnf(sqltrans) $sql "\n"
+    } else {
+        sql::exe $sql -tr 1 -cl 1
+    }
+}
+
+# Do create/drop/dump/restore on the database
+#------------------------------------------
+proc make {oper {branch {}}} {
+    global cnf
+    
+#puts "MAKE:$oper:$branch:"
+    if {[set h $cnf(host)] != {}} {set h "-h $h"}
+    switch $oper {
+        drop	{set fam [lsort -integer -index 0 -decreasing [wmparse::family $branch drop]]}
+        create	{set fam [lsort -integer -index 0 -increasing [wmparse::family $branch create]]}
+        grant	{set fam [lsort -integer -index 0 -increasing [wmparse::family $branch grant]]}
+        text	{set fam [lsort -integer -index 0 -increasing [wmparse::family $branch text]]}
+        default	{set fam [wmparse::family $branch create]}
+    }
+
+    if {$oper == {grant}} {		;# make sure all our groups exist
+        set sql {}
+        foreach grp [sql::qlist "select '[join [wmparse::groups] {' union select '}]' except select groname from pg_group"] {
+            append sql "\ncreate group \"$grp\";"
+        }
+        if {$cnf(debug)} {puts "-- Groups:$sql"} else {puts "Groups:$sql"}
+        if {!$cnf(dry)} {exorsave $sql}
+    }
+    if {$cnf(trans) && [lcontain $oper {dump restore}]} {err_prompt "Can't use -trans mode while dumping or restoring: $fname"; exit 1}
+    if {$oper == {dump}} {
+        foreach rec $fam {
+            lassign $rec lev obj name code
+            if {$obj != {table} || [ignore $name $obj] || [iswm $name]} continue
+            if {$cnf(debug)} {
+                puts "\n-- Dump of table: $name written to: [file join $cnf(workdir) $name.$cnf(dext)]"
+            } else {
+                puts "Dumping table: $name to: [file join $cnf(workdir) $name.$cnf(dext)]"
+            }
+#            if {$cnf(dry) && !$cnf(debug)} continue	;#dump tables anyway so we can include restore code later?
+            if {$cnf(dry)} continue
+            set cmd "pg_dump $h $cnf(db) -a -x -E SQL_ASCII --disable-triggers -t $name >[file join $cnf(workdir) $name.$cnf(dext)]"
+            if (!$cnf(debug)) {puts "  $cmd"}
+            exec -ignorestderr {*}$cmd			;#otherwise notices will generate an error
+            set cmd "pg_dump $h $cnf(db) -s -x -t $name >[file join $cnf(workdir) $name.$cnf(sext)]"
+            exec {*}$cmd
+            lassign [sql::one "select count(*) from $name"] count
+            write_file [file join $cnf(workdir) $name.$cnf(cext)] $count
+            if (!$cnf(debug)) {puts "  Records: $count"}
+        }
+    } elseif {$oper == {restore}} {
+        foreach rec $fam {
+            lassign $rec lev obj name code
+            if {$obj != {table} || [ignore $name $obj] || [iswm $name]} continue
+            set fname [file join $cnf(workdir) $name.$cnf(dext)]
+            if {$cnf(debug)} {
+                puts "\n-- Restore of: $name from file: $fname\n"
+#                puts "[read_file $fname]"		;#include restore code?
+            } else {
+                puts "Restoring table $name from file: $fname"
+            }
+            if {$cnf(dry)} continue
+            if {![file exists $fname]} {err_prompt "Can't find data file: $fname"; continue}
+            set cmd "psql $h $cnf(db) -f $fname"
+            system $cmd
+            puts "  Before: [eval set bcnt [read_file [file join $cnf(workdir) $name.$cnf(cext)]]]"
+            puts "   After: [eval set acnt [eval exec psql $h $cnf(db) -t -c \"select count(*) from $name\"]]"
+            if {$acnt != $bcnt} {err_prompt "Cmd:$cmd\nHad $bcnt records before dump but have $acnt after restore"}
+        }
+    } else {		;#text, create, grant or drop
+        foreach rec $fam {
+            lassign $rec lev obj name code
+#puts " lev:$lev obj:$obj name:$name code:$code"
+            if {[ignore $name $obj]} continue
+            if {$cnf(warn) && $oper == {drop} && $obj == {table} && ![lcontain $cnf(oper) dump]} {err_prompt "About to drop table $name without dumping it first"}
+            if {$oper == {text} && ![lcontain {table view} $obj]} continue	;#can only update text on tables/views
+            if {[lcontain {table view} $obj] && [lcontain $cnf(oper) create] && $cnf(crtab) == {}} {set cnf(crtab) 1}
+            if {$code == {}} continue		;#nothing to do
+#puts {----------------------------------------------------------------}
+            if {$cnf(debug)} {puts "\n-- $obj $name --\n$code"} else {puts "$oper: $lev $obj: $name"}
+            if {$cnf(dry)} continue
+            exorsave $code
+        }
+    }
+}
+
+# List out the selected objects in dependency order
+#----------------------------------------------------
+proc deplist {} {
+    foreach rec [lsort -integer -index 0 [wmparse::family]] {
+        lassign $rec lev obj name
+        if {[ignore $name $obj]} continue
+        puts [format {%3d %-12s %-48s %-s} $lev $obj $name [wmparse::field $name dep]]
+    }
+}
+
+# Recursive support call for showing dependency tree
+#----------------------------------------------------
+proc dodeps {name lev} {
+    global ddd
+    set deps [wmparse::field $name ped]
+    if {[llength $deps] <= 0} return
+    foreach d $deps {
+        if {![set ign [ignore $d]]} {
+            puts -nonewline [format {%-3.3s %2d } [wmparse::field $d obj] $lev]
+            for {set i 0} {$i < $lev} {incr i} {puts -nonewline {.   }}
+        }
+        if {[info exists ddd($d)] || [wmparse::level $d] > $lev} {	;#if already expanded or not at maximal depth
+            if {!$ign} {puts "$d -X-"}	;#don't expand at this time
+        } else {
+            if {!$ign} {puts "$d "}
+            dodeps $d [expr $lev + 1]	;#expand children
+            set ddd($d) 1		;#note this node has been expanded
+        }
+    }
+}
+
+# Show a dependency tree
+#----------------------------------------------------
+proc deptree {} {
+    array unset ::ddd
+    foreach rec [lsort -integer -index 0 [wmparse::family]] {
+        lassign $rec lev obj name
+        if {$lev > 0} continue
+        if {![ignore $name $obj]} {puts [format {%-3.3s %2d %s} $obj 0 $name]}
+        dodeps $name 1
+    }
+}
+
+# Test if an object is part of the wyseman schema (not user data)
+#----------------------------------------------------
+proc iswm {name} {
+    return [regexp {^wm\..*} $name]
+}
+
+# Test if an object should be included or ignored in the current pass
+#----------------------------------------------------
+proc ignore {name {obj {}}} {
+    global cnf
+#puts "NAME:$name"
+    if {$obj == {}} {set obj [wmparse::field $name obj]}	;#slower, but
+#    if {$lev == {}} {set lev [wmparse::level $name]}		;#just in case they weren't specified
+    set file [wmparse::field $name file]
+    
+    if {[lcontain $cnf(nexcl) $name]}	{return 1}	;#if object explicitly excluded, ignore it
+    if {[lcontain $cnf(texcl) $obj]}	{return 1}
+    if {[lcontain $cnf(fexcl) $file]}	{return 1}
+
+    if {$cnf(nincl) == {} && $cnf(tincl) == {} && $cnf(fincl) == {} && $cnf(branch) == {}} {return 0}	;#if no "includes" include everything
+    
+    foreach br $cnf(branch) {			;#support multiple branches
+#puts " br:$br"
+        if {$br == $name || [wmparse::ancest $br $name]} {return 0}	;#include object if decends from any named branch
+    }
+
+    if {$cnf(nincl) != {} && [lcontain $cnf(nincl) $name]} {return 0}	;#if explicitly included
+#    if {$cnf(tincl) != {} && [lcontain $cnf(tincl) $obj]} {return 0}
+#    if {$cnf(fincl) != {} && [lcontain $cnf(fincl) $file]} {return 0}
+#puts " ignore:$name"
+    return 1							;#default ignore
+}
+
+# Report SQL errors
+#----------------------------------------------------
+proc sql_err {msg info} {
+    puts "SQL ERROR: $msg: $info"
+}
+    
+# Report other errors, wait for confirmation before continuing
+#----------------------------------------------------
+proc err_prompt {msg {type Error}} {
+    puts -nonewline "$type: $msg\n  Hit <Enter> to continue (or Ctrl-C to quit): "
+    flush stdout
+    gets stdin
+}
+    
+# Main
+#----------------------------------------------------
+prargs $argv {
+    -oper	{set cnf(oper) {%v}}
+    -db		{set cnf(db) {%v}}
+    -wmdlib	{set cnf(wmdlib) {%v}}
+    -wmdlibdir	{set cnf(wmdlibdir) {%v}}
+    -wmdlibver	{set cnf(wmdlibver) {%v}}
+    -host	{set cnf(host) {%v}}
+    -work	{set cnf(workdir) {%v}}
+    -tincl	{set cnf(tincl) {%v}}
+    -texcl	{set cnf(texcl) {%v}}
+    -nincl	{set cnf(nincl) {%v}}
+    -nexcl	{set cnf(nexcl) {%v}}
+    -fincl	{set cnf(fincl) {%v}}
+    -fexcl	{set cnf(fexcl) {%v}}
+    -branch	{set cnf(branch) {%v}}
+    -repl	{set cnf(repl) {%v}}
+    -dry	{set cnf(dry) {%v}; if {$cnf(dry)} {set cnf(crtab) 0; set cnf(warn) 0}}
+    -warn	{set cnf(warn) {%v}}
+    -orph	{set cnf(orph) {%v}}
+    -crtab	{set cnf(crtab) {%v}}
+    -debug	{set cnf(debug) {%v}}
+    -trans	{set cnf(trans) {%v}}
+} {} {
+    lappend cnf(files) {%v}
+}
+
+if {$cnf(workdir) == {}} {
+    set cnf(workdir)	[file join [lib::cfig workdir] wyseman $cnf(db)]
+}
+set cnf(stddef)		[file join [lib::cfig workdir] stddef.wms]
+lappend cnf(files)	$cnf(stddef)		;#contains standard schema definitions
+
+if {![file exists $cnf(workdir)]} {file mkdir $cnf(workdir)}
+write_file $cnf(stddef) [wmddict::schema]	;#standard definitions
+
+sql::init -data $cnf(db) -host $cnf(host) -error sql_err
+if {$cnf(wmdlib) == {}} {set cnf(wmdlib) "$cnf(db)-def"}
+if {$cnf(wmdlibdir) == {}} {set cnf(wmdlibdir) "./$cnf(wmdlib)"}
+
+if {$cnf(oper) == {init}} {
+    puts "Initializing database with bootstrap schema and components:"
+    sql::x [wmddict::bootstrap]
+    exit 0
+}
+
+eval wmparse::parse $cnf(files)			;#digest all the objects
+
+if {$cnf(oper) == {vers}} {
+    puts "Updating stored object/version information for all objects:"
+    foreach rec [lsort -integer -index 0 [wmparse::family]] {	;#for each object
+        lassign $rec lev obj name
+#puts "obj:$obj name:$name drop:$wmparse::ob($name.drop)"
+        sql::x "select wm.vers('$name','$obj',$wmparse::ob($name.vers),'$wmparse::ob($name.dep)','[sql::escape $wmparse::ob($name.drop)]');"
+    }
+    exit 0
+}
+
+foreach s {nincl nexcl branch} {		;#expand any name wildcarding
+    set cnf($s) [wmparse::expand $cnf($s)]
+}
+
+if {$cnf(orph) && [lcontain $cnf(oper) drop]} {		;#check for any orphan objects
+    set pl {}
+    foreach rec [sql::qlist "select object,obj_type,dep,drop from wm.obj_vers where object not in ('[join $wmparse::ob(names) {','}]') order by dep;"] {
+        lassign $rec object obj_type dep drop
+#puts "Orphan: $rec"
+        lappend pl $object
+        wmparse::object $obj_type -name $object -dep $dep -drop $drop			;#define it as though it had been found in the source files, but with no create script
+        if {![lcontain $cnf(branch) $object]} {lappend cnf(branch) $object}		;#include as an object for the drop phase
+    }
+    if {$pl != {}} {err_prompt "Orphan object(s) found (which will be dropped): [join $pl "\n"]" Warning}
+}
+
+foreach rec [lsort -integer -index 0 [wmparse::family]] {	;#for each object
+    lassign $rec lev obj name
+    set fnm [wmparse::field $name file]
+    if {[lcontain $cnf(tincl) $obj] && ![lcontain $cnf(branch) $name]} {lappend cnf(branch) $name}	;#include all objects of this type and their progeny
+    if {[lcontain $cnf(fincl) $fnm] && ![lcontain $cnf(branch) $name]} {lappend cnf(branch) $name}	;#include all objects from this file and their progeny
+}
+
+#if replacing functions (create or replace), we can ignore things that depend on them
+if {$cnf(repl)} {				
+    foreach rec [lsort -integer -index 0 [wmparse::family]] {	;#for each object
+        lassign $rec lev obj name
+#puts "obj:$obj name:$name"
+        foreach dep [wmparse::field $name dep] {		;#for each dependency
+            set dobj [wmparse::field $dep obj]
+            if {[lcontain {function view} $dobj]} {
+#puts "  drop dep:$name:$dep:"
+                wmparse::dropdep $name $dep
+            }
+        }
+    }
+}
+
+foreach oper $cnf(oper) {
+    switch $oper {
+        init	{dia::err "Operation: init should be used alone, not with other operations"; exit 1}
+        create	{make create}
+        drop	{make drop}
+        dump	{make dump}
+        restore	{make restore}
+        grant	{make grant}
+        text	{make text}
+        lib	{make_lib}
+        list	{deplist}
+        tree	{deptree}
+    }
+}
+
+if {$cnf(trans) && $cnf(sqltrans) != {}} {		;#execute all sql at once
+    puts "Executing sql as a single transaction:"
+    sql::exe $cnf(sqltrans) -tr 1 -cl 1
+}
+
+if {$cnf(crtab) != {} && $cnf(crtab)} {		;#refresh native cache table
+    puts "Data dictionary initializing:"
+    set i -1
+    while {[set initcode [wmddict::init_sql [incr i]]] != {}} {
+        if {$cnf(debug)} {puts "$initcode"}
+        sql::exe $initcode -tr 1 -cl 1
+    }
+}

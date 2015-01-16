@@ -1,0 +1,280 @@
+# Tables describing valid users (employees) on the system
+#include(Copyright)
+#TODO:
+#- simplify from ATI schema
+#- use defined rules for empl_v_sup
+#- 
+
+set fields(empl.pk) {empl_id}
+set fields(empl.in) {pertitle surname givnames prefname jobtitle addr city state zip country phone workph mobile email ssn bday hiredate termdate lrevdate nrevdate paytyp empltyp superv status mstat payrate allow wccode eic cmt}
+set fields(empl.up) [concat $fields(empl.pk) $fields(empl.in)]
+set fields(empl.se) [concat $fields(empl.up) lastmod username]
+set fields(empl_v_pub.se) {empl_id pertitle prefname surname givnames jobtitle status superv supname phone workph mobile email username firstname formal casual}
+set fields(empl_v_sup.se) [concat $fields(empl.se) {firstname formal casual supname _oid}]
+set fields(empl_v_sup.si) $fields(empl.in)
+set fields(empl_v_sup.su) $fields(empl.up)
+set fields(empl_v_sup.up) {pertitle prefname jobtitle phone workph mobile email lrevdate nrevdate payrate}
+
+# Table contains an entry for each employee of the organization
+#----------------------------------------------------------------
+table empl {empl_seq} {
+
+    empl_id	int4 primary key default nextval('empl_seq'),	 -- Record number.
+    pertitle	varchar null,		-- personal title
+		
+    surname	varchar not null,	-- Employee's last name.					
+    givnames	varchar not null,	-- Given names
+    prefname	varchar,		-- Preferred name
+    jobtitle	varchar,		-- Job title
+	
+    addr	varchar,		-- Mailing address
+    city	varchar,
+    state	varchar(10),
+    zip		varchar(10),
+    country	varchar(10),
+    phone	varchar,
+	
+    workph	varchar,		-- Work phone
+    mobile	varchar,		-- Mobile phone
+    email	varchar,		-- Email address
+    username	varchar,		-- On the system (and in the database)
+    ssn		varchar(11),
+
+    bday	date,			-- Birthdate
+    hiredate	date,			-- Date hired
+    termdate	date,			-- Date of termination
+    lrevdate	date,			-- Last review date
+    nrevdate	date,			-- Next review date
+    lastmod	date,			-- When this record was last modified
+    
+    paytyp	varchar(8) CHECK (paytyp in ('annual', 'basebon', 'hourly', 'monthly', 'weekly', 'commis', 'other')),
+
+ -- The 'other' is added due to lack of valid data in original table, i.e. blanks and nulls.
+    empltyp	varchar(4) CHECK (empltyp in ('reg', 'part', 'temp', 'seas', 'trai', 'othr')),
+ 
+    superv	int4 references empl,	-- The employee ID of this employee's supervisor
+
+ -- Employee status
+    status	varchar(10) CHECK (status in ('active', 'former', 'laidoff', 'other', 'proba', 'quit', 'quitnh', 'termin')),
+
+    mstat	char(1) CHECK (mstat in ('m','s')),	-- Marital status
+    payrate	varchar(18),		-- Pay rate
+    allow	int4,			-- Number of withholding allowances
+    wccode	varchar(18),		-- Workers' compensation category code
+    eic		varchar(4),		-- Earned income credit status
+    cmt		varchar			-- General comments
+}
+index {} empl superv
+index {} empl username
+
+sequence empl_seq {} {
+    minvalue 1000
+} -grant {
+    {emplim	{} {s u}}
+}
+
+# Return the first name this person likes to be called by
+# calling sequence: firstname(givnames, prefname)
+#----------------------------------------------------------------
+function firstname(varchar,varchar) {} {
+  returns varchar as 'select
+      case when not $1 isnull then
+          $1
+      else
+          split_part(ltrim($2, \' \'), \' \', 1)
+      end;
+  ' language sql immutable;
+}
+
+# Base view which includes expanded versions of FK references
+#----------------------------------------------------------------
+view empl_v {empl firstname(varchar,varchar)} {
+    select
+        eval(fld_list $fields(empl.se)),
+
+        firstname(prefname, givnames) as firstname,
+        surname || ', ' || givnames as formal,
+        firstname(prefname, givnames) || ' ' || surname as casual,
+        (select firstname(prefname, givnames) || ' ' || surname from empl where empl_id = e.superv) as supname,
+        oid as _oid from empl e;
+
+    eval(rule_insert empl_v empl $fields(empl.in))
+    eval(rule_update empl_v empl $fields(empl.up) $fields(empl.pk))
+    eval(rule_delete empl_v empl $fields(empl.pk))
+} -grant {
+    {emplim	{} {} {s i u}}
+}
+
+# Determine if an employee has another employee as his ancestor.
+# Returns true or false
+# An employee is, by definition, not his own supervisor
+# This adds a level parm to prevent infinite recursion.
+# calling sequence: empl_ancest(employee,ancestor)
+#----------------------------------------------------------------
+function empl_ancest(int4,int4) _empl_ancest(int4,int4,int4) {
+    returns boolean as 'select _empl_ancest($1,$2,0);' language sql;
+}
+# calling sequence: _empl_ancest(employee,ancestor,level)
+#----------------------------------------------------------------
+function _empl_ancest(int4,int4,int4) {empl_v_pub} {
+  returns boolean as '
+    declare 
+        trec record;
+    begin
+        if $3 > 15 then
+            raise exception \'Supervisor loop found on employee %\', $1;
+        end if;
+
+-- a person can not be his own supervisor
+-- also if null or 0, we reached top of the ladder so return false
+        if $1 = $2 or $1 is null or $1 = 0 then return false; end if;
+
+-- get the employees record
+        select * into trec from empl_v_pub where empl_id = $1;
+        if not found then 
+            raise exception \'Record not found for employee %\', $1;
+        end if;
+
+-- if he is his own supervisor, we have probably reached the top so false
+        if trec.superv = $1 then return false; end if;
+
+-- if his supervisor is the ancestor, return true
+        if trec.superv = $2 then return true; end if;
+
+-- else check the parent recursively
+        return _empl_ancest(trec.superv, $2, $3+1);
+    end;
+  ' language plpgsql
+}
+
+# A view that everyone can have read access to (non-sensitive information)
+#----------------------------------------------------------------
+view empl_v_pub empl_v "
+    select [fld_list $fields(empl_v_pub.se)] from empl_v;
+" -grant {
+    public
+}
+    
+# View with limited privileges for supervisors to see their own people
+#----------------------------------------------------------------
+view empl_v_sup {empl_v empl_ancest(int4,int4) priv curr_uid()} {
+    select eval(fld_list $fields(empl_v_sup.se)) from empl_v where 
+    exists (select * from priv where empl_id = curr_uid() and ((priv = 'emplim' and alevel = 'super') or (priv = 'payroll' and alevel = 'user'))) or
+    empl_ancest(empl_id,curr_uid());
+
+--FIXME: remove super privs here?  Use empl_v instead for emplim supervisor?
+    --Only the emplim-super can insert records
+    create rule empl_v_sup_innull as on insert to empl_v_sup do instead nothing;
+    create rule empl_v_sup_insert as on insert to empl_v_sup where
+        (select count(*) from priv where priv = 'emplim' and alevel = 'super' and empl_id = curr_uid()) > 0
+        do instead
+        insert into empl (eval(fld_list $fields(empl_v_sup.si)))
+        values (eval(fld_list_new $fields(empl_v_sup.si)));
+
+--FIXME: remove super privs here?  Use empl_v instead for emplim supervisor?
+    --Emplim-super can update any field    
+    create rule empl_v_sup_upnull as on update to empl_v_sup do instead nothing;
+    create rule empl_v_sup_update as on update to empl_v_sup where
+        (select count(*) from priv where priv = 'emplim' and alevel = 'super' and empl_id = curr_uid()) > 0
+        do instead
+        update empl set eval(fld_list_eq $fields(empl_v_sup.su))
+        where empl_id = old.empl_id;
+    
+    --Emplim-user can only update certain fields
+    create rule empl_v_sup_update1 as on update to empl_v_sup where
+        (select count(*) from priv where priv = 'emplim' and alevel = 'user' and empl_id = curr_uid()) > 0 and
+        empl_ancest(old.empl_id,curr_uid())
+        do instead
+        update empl set eval(fld_list_eq $fields(empl_v_sup.up))
+        where empl_id = old.empl_id;
+    
+    -- We'll just avoid deleting employees (without DBA assistance for now)
+    -- create rule empl_v_sup_denull as on delete to empl_v_sup do instead nothing;
+    -- create rule empl_v_sup_delete as on delete to empl_v_sup where
+    --     (select count(*) from priv where priv = 'emplim' and alevel = 'super' and empl_id = curr_uid()) >= 1
+    --     do instead delete from empl where empl_id = old.empl_id;
+} -grant {
+    {emplim	s {i u}}
+}
+
+#Return the employee ID number of the current user
+#This can't be 'security definer' or current_user would be the dba
+#----------------------------------------------------------------
+function curr_uid() empl_v_pub {
+  returns int4 security invoker as '
+    select empl_id from empl_v_pub where username = current_user;
+  ' language 'sql' stable;
+}
+
+#Return an employee ID number from his system (and database) username
+#----------------------------------------------------------------
+function empl_uid(varchar) empl {
+  returns int4 security definer as '
+    select empl_id from empl where username = $1;
+  ' language 'sql' stable;
+}
+
+#Return an employee username from an employee ID number
+#----------------------------------------------------------------
+function empl_username(int4) empl {
+  returns varchar security definer as '
+    select username from empl where empl_id = $1;
+  ' language 'sql' stable;
+}
+
+# Return an employee name from an employee number
+#----------------------------------------------------------------
+function empl_name(int4) empl_v_pub {
+  returns varchar as '
+    select casual from empl_v_pub where empl_id = $1;
+  ' language sql stable;
+}
+
+# Return an employee lname,fname from an employee number
+#----------------------------------------------------------------
+function name_empl(int4) empl_v_pub {
+  returns varchar as '
+    select formal from empl_v_pub where empl_id = $1;
+  ' language sql stable;
+}
+
+# Return the empl_id of the employee if he has a login or his lowest 
+# supervisor who has a login
+#----------------------------------------------------------------
+function empl_emsup(int4) _empl_emsup(int4,int4) {
+    returns int4 as 'select _empl_emsup($1,1)' language sql;
+}
+function _empl_emsup(int4,int4) {empl_v_pub empl_username(int4)} {
+  returns int4 as '
+    declare
+        trec record;
+    begin
+        if $2 > 50 then
+            raise exception ''Recursion level exceeded on employee %'', $1;
+        end if;
+        if empl_username($1) is not null then
+            return $1;
+        end if;
+        select * into trec from empl_v_pub where empl_id = $1;
+        if not found or trec.superv = $1 then
+            return $1;
+        end if;
+        return _empl_emsup(trec.superv,$2+1);
+    end;
+  ' language plpgsql;
+}
+
+# Automatically update last-modified date
+#----------------------------------------------------------------
+function empl_tf_biu() {} {
+  returns trigger as '
+    begin
+        new.lastmod := current_date;
+        return new;
+    end;
+  ' language plpgsql;
+}
+trigger empl_tr_biu {} {
+    before insert on empl
+    for each row execute procedure empl_tf_biu();
+}

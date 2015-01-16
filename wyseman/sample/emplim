@@ -1,0 +1,138 @@
+#!/usr/bin/wishx
+#include(Copyright)
+#Employee information manager
+set cnf(title) "Emplim Version 0.80"      ;#Sep 2005
+#TODO:
+#- 
+
+set cnf(appname)	emplim
+package require wylib
+
+set cnf(table) empl_v_sup
+
+#Preferences control array {tag title display_type user_edit}
+set cnf(pref) {\
+    -f {labcd	ent	{Label Print Command:}	::cnf(labcmd)	-def {/usr/bin/lpr -PL} -help {The command used to print labels}}\
+    -f {autodoc	chk	{Launch Documents:}	::cnf(autodoc)	-def 0 -help {Automatically launch the document window each time the program is started}}\
+    -f {autohld	chk	{Launch Withholdings:}	::cnf(autohld)	-def 0 -help {Automatically launch the withholding window each time the program is started}}\
+    -f {clab	chk	{Confirm Labels:}	::cnf(conflab)	-def yes -help {Ask you each time before printing address labels}}\
+}
+
+set cnf(emple) {-slaves {{priv p}}\
+    -dlr.pre empl_pre_dlr -adr.pre empl_pre_add -upr.pre empl_pre_upr\
+    -m clr -m adr -m upr -m dlr -m prv -m rld -m nxt -m ldr -m sep\
+    -m {report	{Employee Report}	{emp_report %w}		{Generate a report on the current employee}}\
+    -m {email	{Send Email}		{iemail %w}		"Write a quick email to this person (without logging to the event history)"}\
+    -m {label	{Address Label}		{%w maillab}	{Print an address label for this contact}}\
+    -m {cores	{Write Letter}		{do_cores %w}	-s {Cores -gmc {-exp 1} -bg orange}		"Write a letter and log it to the event history"}
+}
+
+set cnf(emplp)	{-selectmode extended\
+    -m clr -m rld -m def -m all -m prv -m sel -m nxt -m lby -m aex\
+    -def {\
+        -where {{0.status eq active}} -order formal\
+    }\
+    -disp {empl_id formal status city state workph mobile superv supname}\
+}
+
+set cnf(prive) {priv_v -master {{m emple}} \
+    -m clr -m adr -m upr -m dlr -m prv -m rld -m nxt -m ldr -m sep\
+}
+
+set cnf(privp) { \
+    -m clr -m rld -m def -m all -m prv -m sel -m nxt -m lby -m aex\
+}
+
+# Items common to add/update
+#------------------------------------------
+proc empl_pre_common {w} {
+    $w force givnames surname superv hiredate ssn
+    if {[$w g prefname] == {} && [llength [$w g givnames]] > 1} {
+        $w s prefname [lindex [$w g givnames] 0]
+        $w verify prefname
+    }
+    $w request phone payrate
+    return ?
+}
+
+# Do before adding a contact record
+#------------------------------------------
+proc empl_pre_add {w} {
+    if {![priv::usercheck super]} {return 0}
+    return [empl_pre_common $w]
+}
+
+# Do before adding a contact record
+#------------------------------------------
+proc empl_pre_upr {w} {
+    if {![priv::usercheck]} {return 0}
+    if {![priv::haspriv super]} {
+        foreach i {empl_id surname givnames city state zip country ssn bday hiredate termdate superv proxy status mstat allow wccode eic} {
+            if {[$w field $i modified]} {dia::err "Sorry, you don't have permission to change the field: [$w field $i cget title]"; return 0}
+        }
+    }
+    return [empl_pre_common $w]
+}
+
+# Do before deleting the contact record
+#------------------------------------------
+proc empl_pre_dlr {w} {
+    if {![priv::haspriv super]} {return 0}
+    dia::err {Employee deletions should be done by the database administrator.}
+    return 0
+}
+
+# Add the current employee as a database user
+#------------------------------------------
+proc new_user {w} {
+    if {![priv::usercheck user -priv privedit]} {return 0}
+    set id [$w emple get empl_id]
+    if {[catch {set pwinfo [getpwinfo $id]}]} {
+        dia::err "Can't find a user on the system with ID: $id"
+        return
+    }
+    set uname [lindex $pwinfo 0]
+#puts "  id:$id uname:$uname"
+    sql::one "select create_user('$uname',$id);"
+    dia::brief "Adding user $id with username: $uname" 1500
+}
+
+# Drop the current employee from database access
+#------------------------------------------
+proc old_user {w} {
+    if {![priv::usercheck user -priv privedit]} {return 0}
+    set uname [$w emple get username]
+    if {$uname == {}} {
+        dia::err "No registered username for employee ID: $id"
+        return
+    }
+#puts "  id:$id uname:$uname"
+    sql::one "drop user $uname ;"
+    dia::brief "Dropping username: $uname" 1500
+}
+
+# Construct the main window
+#----------------------------------------------------
+proc main_win {w} {
+    global cnf
+
+    set m [$w menu w]
+    $m mb tools -under 0 -help {Common helpful functions for this application}
+    $m tools mi priv {Privileges} -under 0 -s Privs -help {Allows assigning of module permissions to a user} -command "top::top Privileges: priv -build {top::dbep %w \$::cnf(prive) \$::cnf(privp)}"
+    $m tools mi newu {Add as user} -under 0 -help {Register the current employee as a new user of the database} -command "new_user $w"
+    $m tools mi oldu {Drop as user} -under 0 -help {Remove the current employee from being a user of the database} -command "old_user $w"
+
+    top::add [eval dbe::dbe $w.e -pwidget $w.p $cnf(table) $cnf(emple) -bg blue -bd 3] emple
+    pack $w.e -side top -fill both
+
+    top::add [eval dbp::dbp $w.p -ewidget $w.e $cnf(emplp)] emplp
+    pack $w.p -side top -fill both -expand yes
+}
+
+# Main
+#----------------------------------------------------
+priv::runcheck
+eval pref::init $cnf(pref)
+#set cnf(progname) [tk appname $cnf(appname)]
+if {[priv::haspriv super]} {set cnf(table) empl_v}
+set w [top::top $cnf(appname) m main_win]

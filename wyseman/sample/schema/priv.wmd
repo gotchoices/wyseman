@@ -1,0 +1,16 @@
+#------------------------------------------
+#include(Copyright)
+tabdef priv -focus priv -fields {
+    {empl_id		ent	5	{0 0}		-state readonly -just r}
+    {priv		ent	10	{0 1}		-spf exs}
+    {alevel		pdm	18	{0 2}		-ini user}
+    {cmt		mle    {26 2}	{0 3}		}
+}
+
+#A view with some additional helpful fields
+tabdef priv_v -fields {
+    {formal		ent	20	{3 1}		-state readonly -write 0}
+    {casual		ent	20	{3 2}		-state readonly -write 0}
+    {username		ent	10	{3 3}		-state readonly -write 0}
+} -inherits priv
+

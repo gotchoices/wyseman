@@ -1,0 +1,40 @@
+#Miscellaneous objects that don't correlate to any single table
+#include(Copyright)
+#TODO:
+#- 
+
+#Convert a date to an ISO format (alpha month) string
+#-------------------------------------------
+function norm_date(date) {} {
+  returns text as '
+    select to_char($1,\'YYYY-Mon-DD\');
+  ' language 'sql';
+}
+
+#Convert a date to an ISO format (alpha month) string
+#-------------------------------------------
+function norm_date(timestamp) {} {
+  returns text as '
+    select to_char($1,\'YYYY-Mon-DD HH24:MI:SS\');
+  ' language 'sql';
+}
+
+#Case insensitive operators (for consistency with other operators)
+#-------------------------------------------
+function eqnocase(text,text) {} {
+  returns boolean as '
+    begin return upper($1) = upper($2); end;
+  ' language 'plpgsql' with (iscachable);
+}
+other eqnocase_o eqnocase(text,text) {
+    create operator =* (leftarg = text,rightarg = text,procedure = eqnocase, negator = !=*);
+} {drop operator =* (text,text);}
+
+function neqnocase(text,text) {} {
+  returns boolean as '
+    begin return upper($1) != upper($2); end;
+  ' language 'plpgsql' with (iscachable);
+}
+other neqnocase_o neqnocase(text,text) {
+    create operator !=* (leftarg = text,rightarg = text,procedure = neqnocase, negator = =*);
+} {drop operator !=* (text,text);}

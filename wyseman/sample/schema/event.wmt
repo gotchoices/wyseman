@@ -1,0 +1,90 @@
+# Copyright Action Target Inc. all rights reserved
+#------------------------------------------
+
+tabtext event		{Events}	{Evnt}		{Native table of calendar events and TODO items} {
+    {own_id		{Owner ID}	{Own}		{The ID of the person who created this event}}
+    {seq		{Sequence}	{Seq}		{A number automatically assigned to each event to make it uniquely identifiable}}
+    {status		{Status}	{Stat}		{The current state of this event record} {
+        {open		{Scheduled} {The event is scheduled on the calendar and anticipated to happen but can still be changed}}
+        {clsd		{Completed} {The event has been completed and the user has logged comments about its outcome}}
+    }}
+    {summary		{Summary}	{Sum}		{A short description of the event (task or meeting)}}
+    {objective		{Objective}	{Obj}		{A longer description of what the event is hoped to accomplish}}
+    {location		{Location}	{Loc}		{Where the event will take place (address or site)}}
+    {outcome		{Outcome}	{Out}		{A summary written by the user of how the event worked out, logged at the time the event is closed}}
+    {startdate		{Date}		{Dat}		{The date when the event will start}}
+    {starttime		{Time}		{Tim}		{The time of day when the event will start}}
+    {length		{Duration}	{Dura}		"How long the event should take:\n  Leave blank for an all-day event\n  Other examples: 1 hour, 1 hour 15 minutes, 3.5 hours, etc."}
+    {deadline		{Deadline}	{Dlin}		{A date (and/time) when the event should be completed}}
+    {count		{Every}		{Evy}		{How many days, weeks, months, years to skip between repeats of this event (i.e. day, week, month, year)}}
+    {repeat		{Repeat}	{Rpt}		{The interval period to apply between repeats of this event} {
+        {none		{None}		{The event is not scheduled to repeat in any way}}
+        {day		{Daily}		{The event will be repeated each day at the same time}}
+        {week		{Weekly}	{The event will be repeated each week on the same day of the week and at the same time}}
+        {month		{Monthly Date}	{The event will be repeated each month on the same numeric day of the month (i.e. Jan 3, Feb 3, Mar 3, etc.)}}
+        {monthday	{Monthly Day}	{The event will be repeated each month on the same weekday (i.e. every first Thursday)}}
+        {year		{Yearly}	{The event will be repeated every year on the same month and day (i.e. every June 6th)}}
+    }}
+    {busy		{Busy/Free}	{Busy}		{Whether or not this event will occupy the scheduled time of the people attending it} {
+        {busy		{Busy}		{The person will be occupied during the scheduled time of the event}}
+        {free		{Free}		{The person will not be occupied during the scheduled time by the event}}
+    }}
+    {until		{Rpt Stop}	{Stop}		{A date specifying when the repeating of this event will cease}}
+    {category		{Category}	{Cat}		{A code you make up to group different events together (like "personal", "employees", etc.)}}
+    {priority		{Priority}	{Pri}		{A number specifying how important this event is (1=highest, 10=lowest)}}
+    {created		{Created}	{Crt}		{The date this event was first scheduled}}
+    {lastmod		{Modified}	{Mod}		{The date this event was last modified}}
+    {modby		{Modified By}	{Mdby}		{Who last modified this event}}
+    {closed		{Closed}	{Clsd}		{When this event was completed and closed}}
+    {see_ids		{See IDS}	{SeID}		{The user IDs of those employees who have visibility of this event}}
+}
+
+tabtext event_v		{Events}	{Evnt}		{A view of the calendar events table with several additional helpful fields} {
+    {event_id		{Event}		{EID}		{A unique number identifying each scheduled event (consisting of the ID number of the event's creator and a number of how many events that person has created so far)}}
+    {start		{Start}		{Strt}		{The date and time when the event is scheduled to begin.  If this is left blank, the item will be considered a TODO item.}}
+    {startmin		{Start Min}	{SMin}		{The time when the event will start, expressed as HH:MM am/pm}}
+    {finish		{Finish}	{Fin}		{The date/time when the event will end (derived as: Start + Duration)}}
+    {finishdate		{Finish Date}	{FDat}		{The date when the event will finish}}
+    {finishmin		{Finish Min}	{FMin}		{The time when the event will finish, expressed as HH:MM am/pm}}
+    {owner		{Owner Name}	{Own}		{The name of the person who created this event}}
+    {nextdate		{Next Date}	{Next}		{The next date when a repeating event will occur, the start date for a one-time event, or the deadline if no start date is given}}
+}
+
+tabtext event_v_me	{Events}	{Evnt}		{A view of the calendar events table showing only events the current user has access to} {
+}
+
+#------------------------------------------
+tabtext event_remind	{Remind}	{Rmd}		{A list of reminders that can be specified for each calendar event} {
+    {own_id		{Owner ID}	{Own}		{The ID of the person who created the event that this reminder is linked to}}
+    {seq		{Sequence}	{Seq}		{The number of the event this reminder is linked to}}
+    {advance		{Advance}	{Adv}		{How far in advance to give a reminder for the event (i.e. 1 hour, 15 minutes, etc.)}}
+    {email		{Email}		{Eml}		{An email address to send the reminder to.  If this is blank, the reminder will be a screen pop.}}
+}
+
+tabtext event_remind_v	{Remind}	{Rmd}		{A list of reminders that can be specified for each calendar event} {
+    {event_id		{Event}		{EID}		{A unique number identifying each scheduled event (consisting of the ID number of the event's creator and a number of how many events that person has created so far)}}
+}
+
+tabtext event_remind_v_me {Remind}	{Rmd}		{A view of the calendar reminder table showing only items the current user has access to} {
+}
+
+#------------------------------------------
+tabtext event_empl	{Employee}	{Empl}		{Other employees who have been invited to a calendar event} {
+    {own_id		{Owner ID}	{Own}		{The ID of the person who created the event that this employee is linked to}}
+    {seq		{Sequence}	{Seq}		{The number of the event this employee is linked to}}
+    {inv_id		{Invite ID}	{InID}		{The employee ID of the person invited to the event}}
+    {priv		{Privilege}	{Priv}		{What access the invited person has to this event} {
+        {none		{None}		{The event is not visible on the invited person's calendar}}
+        {read		{Read}		{The event is visible to the invited person but he can not change it}}
+        {option		{Option}	{The invited person can see the event and also remove himself from it}}
+        {write		{Write}		{The invited person can modify the event in ways similar to the event's owner (but can not delete it)}}
+    }}
+}
+
+tabtext event_empl_v	{Employee}	{Empl}		{Other employees who have been invited to a calendar event} {
+    {event_id		{Event}		{EID}		{A unique number identifying each scheduled event (consisting of the ID number of the event's creator and a number of how many events that person has created so far)}}
+    {invite		{Invite Name}	{INam}		{The name of the person invited to the event}}
+}
+
+tabtext event_empl_v_me {Employee}	{Rmd}		{Other employees who have been invited to a calendar event} {
+}

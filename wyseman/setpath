@@ -1,0 +1,7 @@
+#setup to find development wylib
+#Just for debugging usage
+#usage: source setpath
+
+export TCLLIBPATH=". /home/kyle/atisrc/tcl/wylib-0.20 /home/kyle/devel /usr/lib"
+export WYLIB_SITELIB=atilib
+export PATH="$PATH:/home/kyle/devel/wyseman"
