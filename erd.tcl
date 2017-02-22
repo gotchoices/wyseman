@@ -4,8 +4,8 @@
 #of zooming.  Real coordinates are the actual pixels on the canvas which
 #are spaced differently depending on what the current zoom is
 #------------------------------------------
-#Copyright WyattERP, all other rights reserved
-package provide wyseman 0.40
+#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
+package provide wyseman 0.50
 
 #TODO:
 #- draw arrows between tables

@@ -1,4 +1,25 @@
-Installation notes for postgres 8.2 on Fedora 4:
+-------------------------------------------------------------------------------
+Current setup procedure for postgres out of the box on Fedora
+
+- As postgres user:
+	initdb		(or as root: su -l postgres initdb)
+
+- If postgres is on a separate server, edit pg_hba.conf as needed
+- If connecting by various usernames, edit pg_ident.conf as needed
+
+- As root:
+	systemctl start postgresql
+	systemctl status postgresql
+	systemctl enable postgresql
+
+- As postgres, create your database admin user(s):
+	su -l postgres -c 'createuser -d -s -r <dba_username>'
+
+- To run wysegi and other tcl stuff:
+	dnf install tcl-pgtcl
+
+-------------------------------------------------------------------------------
+Older Installation notes for source installation of postgres 8.2 on Fedora 4:
 
 0) grab the latest sources for postgres and pgtcl and save them in /tmp
 http://www.postgresql.org/ftp/source/

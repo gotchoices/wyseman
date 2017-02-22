@@ -5,10 +5,13 @@
 # - have the other modules loaded only when called
 # - include procedures defined by means other than proc (like report::report)
 #
-# In order to work, all procedures must be defined as external using:
+# In order to work, all module procedures must be defined as external using:
 # 'namespace export' on a line all by itself in the tcl file (we just grep
 # for the line).  Also, the namespace of the procedures in the module must 
 # be the same as the name of the file.
+#
+# If the procedures are global, use a dummy line:
+# #provides: proc1 proc2 proc3 ...
 
 pf=pkgIndex.tcl
 libname=sitelib
@@ -37,7 +40,7 @@ EOF
 #Look in any binary source files for exported commands
 if [ -f lib${libname}.so ]; then
     echo -n "    {lib${libname}.so load {" >>$pf
-    grep 'Tcl_CreateObjCommand' c/*.c c/*.cpp |\
+    grep 'Tcl_CreateObjCommand' c/*.c c/*.cpp 2>/dev/null |\
         while IFS=, read j1 proc func j2; do
 #echo "j1:$j1 proc:$proc func:$func j2:$j2"
             proc=$(echo $proc | tr -d '"')
@@ -68,8 +71,12 @@ for fname in *.tcl; do
     if [ "$base" = "init" -o "$base" = "pkgIndex" ]; then continue; fi
     fnlist="$fnlist $base"
     v=procs_$base				#make a variable to accumulate procs in this file
-    for proc in $(grep 'namespace export' $fname |sed -e 's/namespace export//'); do	#find the procs exported in this namespace
+    for proc in $(grep '^[ ]*namespace export' $fname |sed -e 's/namespace export//'); do	#find the procs exported in this namespace
         eval ${v}=\"$(eval echo \$$v) ::$ns::$proc\"
+#echo "  proc:$proc $v:$(eval echo \$$v)"
+    done
+    for proc in $(grep '^#provides:' $fname |sed -e 's/#provides://'); do	#find the global procs exported in this file
+        eval ${v}=\"$(eval echo \$$v) $proc\"
 #echo "  proc:$proc $v:$(eval echo \$$v)"
     done
 done

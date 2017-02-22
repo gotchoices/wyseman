@@ -1,6 +1,6 @@
 #Routines for applications to access the wyseman data dictionary
 #---------------------------------------
-#include(Copyright)
+#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
 
 #TODO:
 #X- Access a user variable which controls language
@@ -9,7 +9,7 @@
 #- consolidate ::columns and ::column functions?
 #- 
 package require wylib
-package provide wyseman 0.40
+package provide wyseman 0.50
 
 namespace eval wmdd {
     namespace export errtext table type column columns value pkey tables_ref table_parts columns_fk

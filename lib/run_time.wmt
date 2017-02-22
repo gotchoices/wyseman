@@ -1,0 +1,168 @@
+#Text descriptions for meta-data tables
+
+tabtext wm.table_text	{Table Text}	{Contains a description of each table in the system} {
+    {tt_sch		{Schema Name}	{The schema this table belongs to}}
+    {tt_tab		{Table Name}	{The name of the table being described}}
+    {language		{Language}	{The language this description is in}}
+    {title		{Title}		{A short title for the table}}
+    {help		{Description}	{A longer description of what the table is used for}}
+}
+
+tabtext wm.column_text	{Column Text}	{Contains a description for each column of each table in the system} {
+    {ct_sch		{Schema Name}	{The schema this column's table belongs to}}
+    {ct_tab		{Table Name}	{The name of the table this column is in}}
+    {ct_col		{Column Name}	{The name of the column being described}}
+    {language		{Language}	{The language this description is in}}
+    {title		{Title}		{A short title for the column}}
+    {help		{Description}	{A longer description of what the column is used for}}
+}
+    
+tabtext wm.value_text	{Value Text}	{Contains a description for the values which certain columns may be set to.  Used only for columns that can be set to one of a finite set of values (like an enumerated type).} {
+    {vt_sch		{Schema Name}	{The schema of the table the column belongs to}}
+    {vt_tab		{Table Name}	{The name of the table this column is in}}
+    {vt_col		{Column Name}	{The name of the column whose values are being described}}
+    {value		{Value}		{The name of the value being described}}
+    {language		{Language}	{The language this description is in}}
+    {title		{Title}		{A short title for the value}}
+    {help		{Description}	{A longer description of what it means when the column is set to this value}}
+}
+
+tabtext wm.error_text	{{Value Text}	{Contains a description for the values which certain columns may be set to.  Used only for columns that can be set to one of a finite set of values (like an enumerated type).} {
+    {vt_sch		{Schema Name}	{The schema of the table this column belongs to}}
+    {vt_tab		{Table Name}	{The name of the table this column is in}}
+    {vt_col		{Column Name}	{The name of the column whose values are being described}}
+    {value		{Value}		{The name of the value being described}}
+    {language		{Language}	{The language this description is in}}
+    {title		{Title}		{A short title for the value}}
+    {help		{Description}	{A longer description of what it means when the column is set to this value}}
+}
+    
+tabtext wm.column_native {Native Columns} {Contains cached information about the tables and their columns which various higher level view columns derive from.  To query this directly from the information schema is somewhat slow, so wyseman caches it here when building the schema for faster access.} {
+    {cnt_sch		{Schema Name}	{The schema of the table this column belongs to}}
+    {cnt_tab		{Table Name}	{The name of the table this column is in}}
+    {cnt_col		{Column Name}	{The name of the column whose native source is being described}}
+    {nat_sch		{Schema Name}	{The schema of the native table the column derives from}}
+    {nat_tab		{Table Name}	{The name of the table the column natively derives from}}
+    {nat_col		{Column Name}	{The name of the column in the native table from which the higher level column derives}}
+    {nat_exp		{Explic Native}	{The information about the native table in this record has been defined explicitly in the schema description (not derived from the database system catalogs)}}
+    {pkey		{Primary Key}	{Wyseman can often determine the "primary key" for views on its own from the database.  When it can't, you have to define it explicitly in the schema.  This indicates that thiscolumn should be regarded as a primary key field when querying the view.}}
+}
+
+tabtext wm.table_data	{Table Data}	{Contains information from the system catalogs about views and tables in the system} {
+    {td_sch		{Schema Name}	{The schema the table is in}}
+    {td_tab		{Table Name}	{The name of the table being described}}
+    {tab_kind		{Kind}		{Tells whether the relation is a table or a view}}
+    {has_pkey		{Has Pkey}	{Indicates whether the table has a primary key defined in the database}}
+    {columns		{Columns}	{Indicates how many columns are in the table}}
+}
+
+tabtext wm.table_pub	{Tables}	{Joins information about tables from the system catalogs with the text descriptions defined in wyseman} {
+    {sch		{Schema Name}	{The schema the table belongs to}}
+    {tab		{Table Name}	{The name of the table being described}}
+    {obj		{Object Name}	{The table name, prefixed by the schema (namespace) name}}
+}
+
+tabtext wm.view_column_usage {View Column Usage} {A version of a similar view in the information schema but faster.  For each view, tells what underlying table and column the view column uses.} {
+    {view_schema	{View Schema}	{The schema the view belongs to}}
+    {view_name		{View Name}	{The name of the view being described}}
+    {table_schema	{Table Schema}	{The schema the underlying table belongs to}}
+    {table_name		{Table Name}	{The name of the underlying table}}
+    {column_name	{Column Name}	{The name of the column in the view}}
+}
+
+tabtext wm.column_data	{Column Data}	{Contains information from the system catalogs about columns of tables in the system} {
+    {cdt_sch		{Schema Name}	{The schema of the table this column belongs to}}
+    {cdt_tab		{Table Name}	{The name of the table this column is in}}
+    {cdt_col		{Column Name}	{The name of the column whose data is being described}}
+    {field		{Field}		{The number of the column as it appears in the table}}
+    {nonull		{Not Null}	{Indicates that the column is not allowed to contain a null value}}
+    {is_pkey		{Def Prim Key}	{Indicates that this column is defined as a primary key in the database (can be overridden by a wyseman setting)}}
+}
+
+tabtext wm.column_pub	{Columns}	{Joins information about table columns from the system catalogs with the text descriptions defined in wyseman} {
+    {sch		{Schema Name}	{The schema of the table the column belongs to}}
+    {tab		{Table Name}	{The name of the table that holds the column being described}}
+    {col		{Column Name}	{The name of the column being described}}
+    {obj		{Object Name}	{The table name, prefixed by the schema (namespace) name}}
+    {nat		{Native Object}	{The name of the native table, prefixed by the native schema}}
+    {language		{Language}	{The language of the included textual descriptions}}
+    {title		{Title}		{A short title for the table}}
+    {help		{Description}	{A longer description of what the table is used for}}
+}
+
+tabtext wm.fkeys_data	{Keys Data}		{Includes data from the system catalogs about how key fields in a table point to key fields in a foreign table.  Each key group is described on a separate row.} {
+    {kst_sch		{Base Schema}		{The schema of the table that has the referencing key fields}}
+    {kst_tab		{Base Table}		{The name of the table that has the referencing key fields}}
+    {kst_cols		{Base Columns}		{The name of the columns in the referencing table's key}}
+    {ksf_sch		{Foreign Schema}	{The schema of the table that is referenced by the key fields}}
+    {ksf_tab		{Foreign Table}		{The name of the table that is referenced by the key fields}}
+    {ksf_cols		{Foreign Columns}	{The name of the columns in the referenced table's key}}
+    {conname		{Constraint}		{The name of the the foreign key constraint in the database}}
+}
+
+tabtext wm.fkeys_pub	{Keys}			{Public view to see foreign key relationships between views and tables and what their native underlying tables/columns are.  One row per key group.} {
+    {tt_sch		{Schema}		{The schema of the table that has the referencing key fields}}
+    {tt_tab		{Table}			{The name of the table that has the referencing key fields}}
+    {tt_cols		{Columns}		{The name of the columns in the referencing table's key}}
+    {tt_obj		{Object}		{Concatenated schema.table that has the referencing key fields}}
+    {tn_sch		{Nat Schema}		{The schema of the native table that has the referencing key fields}}
+    {tn_tab		{Nat Table}		{The name of the native table that has the referencing key fields}}
+    {tn_cols		{Nat Columns}		{The name of the columns in the native referencing table's key}}
+    {tn_obj		{Nat Object}		{Concatenated schema.table for the native table that has the referencing key fields}}
+    {ft_sch		{For Schema}		{The schema of the table that is referenced by the key fields}}
+    {ft_tab		{For Table}		{The name of the table that is referenced by the key fields}}
+    {ft_cols		{For Columns}		{The name of the columns referenced by the key}}
+    {ft_obj		{For Object}		{Concatenated schema.table for the table that is referenced by the key fields}}
+    {fn_sch		{For Nat Schema}	{The schema of the native table that is referenced by the key fields}}
+    {fn_tab		{For Nat Table}		{The name of the native table that is referenced by the key fields}}
+    {fn_cols		{For Nat Columns}	{The name of the columns in the native referenced by the key}}
+    {fn_obj		{For Nat Object}	{Concatenated schema.table for the native table that is referenced by the key fields}}
+}
+    
+tabtext wm.fkey_data	{Key Data}		{Includes data from the system catalogs about how key fields in a table point to key fields in a foreign table.  Each separate key field is listed as a separate row.} {
+    {kyt_sch		{Base Schema}		{The schema of the table that has the referencing key fields}}
+    {kyt_tab		{Base Table}		{The name of the table that has the referencing key fields}}
+    {kyt_col		{Base Columns}		{The name of the column in the referencing table's key}}
+    {kyt_field		{Base Field}		{The number of the column in the referencing table's key}}
+    {kyf_sch		{Foreign Schema}	{The schema of the table that is referenced by the key fields}}
+    {kyf_tab		{Foreign Table}		{The name of the table that is referenced by the key fields}}
+    {kyf_col		{Foreign Columns}	{The name of the columns in the referenced table's key}}
+    {kyf_field		{Foreign Field}		{The number of the column in the referenced table's key}}
+    {key		{Key}			{The number of which field of a compound key this record describes}}
+    {keys		{Keys}			{The total number of columns used for this foreign key}}
+    {conname		{Constraint}		{The name of the the foreign key constraint in the database}}
+}
+    
+tabtext wm.fkey_pub	{Key Info}		{Public view to see foreign key relationships between views and tables and what their native underlying tables/columns are.  One row per key column.} {
+    {tt_sch		{Schema}		{The schema of the table that has the referencing key fields}}
+    {tt_tab		{Table}			{The name of the table that has the referencing key fields}}
+    {tt_col		{Column}		{The name of the column in the referencing table's key component}}
+    {tt_obj		{Object}		{Concatenated schema.table that has the referencing key fields}}
+    {tn_sch		{Nat Schema}		{The schema of the native table that has the referencing key fields}}
+    {tn_tab		{Nat Table}		{The name of the native table that has the referencing key fields}}
+    {tn_col		{Nat Column}		{The name of the column in the native referencing table's key component}}
+    {tn_obj		{Nat Object}		{Concatenated schema.table for the native table that has the referencing key fields}}
+    {ft_sch		{For Schema}		{The schema of the table that is referenced by the key fields}}
+    {ft_tab		{For Table}		{The name of the table that is referenced by the key fields}}
+    {ft_col		{For Column}		{The name of the column referenced by the key component}}
+    {ft_obj		{For Object}		{Concatenated schema.table for the table that is referenced by the key fields}}
+    {fn_sch		{For Nat Schema}	{The schema of the native table that is referenced by the key fields}}
+    {fn_tab		{For Nat Table}		{The name of the native table that is referenced by the key fields}}
+    {fn_col		{For Nat Column}	{The name of the column in the native referenced by the key component}}
+    {fn_obj		{For Nat Object}	{Concatenated schema.table for the native table that is referenced by the key fields}}
+    {unikey		{Unikey}		{Used to differentiate between multiple fkeys pointing to the same destination, and multi-field fkeys pointing to multi-field destinations}}
+}
+    
+tabtext wm.role_members	{Role Members}	{Summarizes information from the system catalogs about members of various defined roles} {
+    {role		{Role}		{The name of a role}}
+    {member		{Member}	{The username of a member of the named role}}
+}
+
+tabtext wm.column_ambig	{Ambiguous Columns} {A view showing view and their columns for which no definitive native table and column can be found automatically} {
+    {sch		{Schema}	{The name of the schema this view is in}}
+    {tab		{Table}		{The name of the view}}
+    {col		{Column}	{The name of the column within the view}}
+    {spec		{Specified}	{True if the definitive native table has been specified explicitly in the schema definition files}}
+    {count		{Count}		{The number of possible native tables for this column}}
+    {natives		{Natives}	{A list of the possible native tables for this column}}
+}

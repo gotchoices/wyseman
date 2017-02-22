@@ -1,0 +1,350 @@
+#Schema to track meta-data about tables, columns, views, etc.
+
+# Help text for tables
+#-------------------------------------------
+table wm.table_text {} {
+    tt_sch		name
+  , tt_tab		name
+  , language	varchar not null
+  , title		varchar
+  , help		varchar
+  , primary key (tt_sch, tt_tab, language)
+} -grant public
+
+# Help text for columns
+#-------------------------------------------
+table wm.column_text {} {
+    ct_sch		name
+  , ct_tab		name
+  , ct_col		name
+  , language		varchar not null
+  , title		varchar
+  , help		varchar
+  , primary key (ct_sch, ct_tab, ct_col, language)
+} -grant public
+    
+# Help text for enumerated types
+#-------------------------------------------
+table wm.value_text {} {
+    vt_sch		name
+  , vt_tab		name
+  , vt_col		name
+  , value		varchar
+  , language		varchar not null
+  , title		varchar		-- Normal title
+  , help		varchar		-- longer help description
+  , primary key (vt_sch, vt_tab, vt_col, value, language)
+} -grant public
+
+# Help text for schema error and other messages
+#-------------------------------------------
+table wm.error_text {} {
+    et_sch		name
+  , et_tab		name
+  , code		varchar(4)
+  , language		varchar not null
+  , title		varchar		-- brief title for error message
+  , help		varchar		-- longer help description
+  , primary key (et_sch, et_tab, code, language)
+} -grant public
+    
+# A table to cache information about the native source(s) of a view's column
+#-------------------------------------------
+table wm.column_native {} {
+    cnt_sch		name
+  , cnt_tab		name
+  , cnt_col		name
+  , nat_sch		name
+  , nat_tab		name
+  , nat_col		name
+  , nat_exp		boolean not null default 'f'
+  , pkey		boolean
+  , primary key (cnt_sch, cnt_tab, cnt_col)	-- each column can have only zero or one table considered as its native source
+} -grant public
+index {} wm.column_native {nat_sch nat_tab}
+
+# The rest is an abstraction layer on postgres system tables and the tables 
+# above to create a data dictionary describing our schema
+#-------------------------------------------
+
+# Backend information about tables (includes system tables)
+#-------------------------------------------
+view wm.table_data {} {
+    select
+        ns.nspname		as td_sch
+      , cl.relname		as td_tab
+      , cl.relkind		as tab_kind
+      , cl.relhaspkey	as has_pkey
+      , cl.relnatts		as columns
+    from		pg_class	cl
+    join		pg_namespace	ns	on cl.relnamespace = ns.oid
+    where		cl.relkind in ('r','v');	--only show tables and views
+} -primary {td_sch td_tab} -grant public
+
+# Unified information about non-system tables
+#-------------------------------------------
+view wm.table_pub {wm.table_data wm.table_text} {
+    select
+        td.td_sch				as sch
+      , td.td_tab				as tab
+      , td.tab_kind
+      , td.has_pkey
+      , td.columns
+      , tt.language
+      , tt.title
+      , tt.help
+      , td.td_sch || '.' || td.td_tab	as obj
+    from		wm.table_data	td
+    join		wm.table_text	tt on td.td_sch = tt.tt_sch and td.td_tab = tt.tt_tab;
+--        where		not td.td_sch in ('pg_catalog','information_schema');
+} -primary {sch tab} -grant public
+
+# A permissioned view of the same name in information schema
+#-------------------------------------------
+view wm.view_column_usage {} {
+    select * from information_schema.view_column_usage
+} -primary {view_schema view_name} -grant public
+
+# Initialize the cache of native tables/columns with default values
+# Scan through view_column_usage iteratively until we resolve to a relation of table type (the native table)
+#-------------------------------------------
+function {wm.default_native()} {wm.column_native wm.column_data wm.view_column_usage} {
+  returns int language plpgsql as $$
+    declare
+        crec	record;
+        nrec	record;
+        sname	varchar;
+        tname	varchar;
+        cnt		int default 0;
+    begin
+        delete from wm.column_native;
+        for crec in select * from wm.column_data where cdt_col != '_oid' and field  >= 0 and cdt_sch not in ('pg_catalog','information_schema') loop
+            sname := crec.cdt_sch;
+            tname := crec.cdt_tab;
+            loop
+                select into nrec * from wm.view_column_usage where view_schema = sname and view_name = tname and column_name = crec.cdt_col order by table_name desc limit 1;	-- order at least gives a predictable result if there are 2 or more...
+                if not found then exit; end if;
+                sname := nrec.table_schema;
+                tname := nrec.table_name;
+            end loop;
+            insert into wm.column_native (cnt_sch, cnt_tab, cnt_col, nat_sch, nat_tab, nat_col, pkey) values (crec.cdt_sch, crec.cdt_tab, crec.cdt_col, sname, tname, crec.cdt_col, crec.is_pkey);
+        end loop;
+        return cnt;
+    end;
+  $$;
+}
+
+# Backend information about columns
+#-------------------------------------------
+view wm.column_data {wm.column_native} {
+  select
+      n.nspname		as cdt_sch
+    , c.relname		as cdt_tab
+    , a.attname		as cdt_col
+    , a.attnum		as field
+    , t.typname		as type
+    , na.attnotnull		as nonull		-- notnull of native table
+    , case when a.attlen < 0 then null else a.attlen end 	as length
+    , coalesce(na.attnum = any((select conkey from pg_constraint
+          where connamespace = nc.relnamespace
+          and conrelid = nc.oid and contype = 'p')::int4[]),'f') as is_pkey
+    , ts.pkey		-- like ispkey, but can be overridden explicitly in the wms file
+    , ts.nat_sch
+    , ts.nat_tab
+    , ts.nat_col
+  from			pg_class	c
+      join		pg_attribute	a	on a.attrelid =	c.oid
+      join		pg_type		t	on t.oid = a.atttypid
+      join		pg_namespace	n	on n.oid = c.relnamespace
+      left join		wm.column_native ts	on ts.cnt_sch = n.nspname and ts.cnt_tab = c.relname and ts.cnt_col = a.attname
+      left join		pg_namespace	nn	on nn.nspname = ts.nat_sch
+      left join		pg_class	nc	on nc.relnamespace = nn.oid and nc.relname = ts.nat_tab
+      left join		pg_attribute	na	on na.attrelid = nc.oid and na.attname = a.attname
+  where c.relkind in ('r','v');		-- only include tables and views
+--        and a.attnum >= 0 			-- don't include system columns
+} -primary {cdt_sch cdt_tab cdt_col} -grant public
+
+# Unified information about columns in non-system tables
+#-------------------------------------------
+view wm.column_pub {wm.column_data wm.column_text} {
+  select
+    cd.cdt_sch					as sch
+  , cd.cdt_tab					as tab
+  , cd.cdt_col					as col
+  , cd.cdt_sch || '.' || cd.cdt_tab			as obj
+  , cd.field
+  , cd.type
+  , cd.nonull
+  , cd.length
+  , cd.is_pkey
+  , cd.pkey
+  , cd.nat_sch
+  , cd.nat_tab
+  , cd.nat_sch || '.' || cd.nat_tab			as nat
+  , cd.nat_col
+  , coalesce(vt.language, nt.language, 'en')	as language
+  , coalesce(vt.title, nt.title, cd.cdt_col)	as title
+  , coalesce(vt.help, nt.help)			as help
+  from		wm.column_data cd
+    left join	wm.column_text vt	on vt.ct_sch = cd.cdt_sch and vt.ct_tab = cd.cdt_tab and vt.ct_col = cd.cdt_col
+    left join	wm.column_text nt	on nt.ct_sch = cd.nat_sch and nt.ct_tab = cd.nat_tab and nt.ct_col = cd.nat_col
+
+    where		cd.cdt_col != '_oid'
+    and		cd.field >= 0;
+--        and		not cd.cdt_sch in ('pg_catalog','information_schema');
+} -primary {sch tab col} -grant public
+
+# Generate an array of column names from their position numbers
+#-------------------------------------------
+function {wm.column_names(oid,int4[])} {} {
+  returns varchar[] as $$
+    declare
+        val	varchar[];
+        rec	record;
+    begin
+        for rec in select * from pg_attribute where attrelid = $1 and attnum = any($2) loop
+            if val isnull then
+                val := array[rec.attname::varchar];
+            else
+                val := val || rec.attname::varchar;
+            end if;
+        end loop;
+        return val;
+    end;
+  $$ language plpgsql stable;
+}
+
+# Information about foreign keys, listed as a single record for every group of fields belonging to a single key
+#-------------------------------------------
+view wm.fkeys_data {wm.column_names(oid,int4[])} {
+  select
+      co.conname					as conname
+    , tn.nspname					as kst_sch
+    , tc.relname					as kst_tab
+    , wm.column_names(co.conrelid,co.conkey)	as kst_cols
+    , fn.nspname					as ksf_sch
+    , fc.relname					as ksf_tab
+    , wm.column_names(co.confrelid,co.confkey)	as ksf_cols
+  from			pg_constraint	co 
+    join		pg_class	tc on tc.oid = co.conrelid
+    join		pg_namespace	tn on tn.oid = tc.relnamespace
+    join		pg_class	fc on fc.oid = co.confrelid
+    join		pg_namespace	fn on fn.oid = fc.relnamespace
+  where co.contype = 'f';
+} -grant public -primary {conname}
+
+# Information about foreign keys to public tables/views
+#-------------------------------------------
+view wm.fkeys_pub {wm.fkeys_data wm.column_native} {
+  select
+    tk.conname
+  , tn.cnt_sch				as tt_sch
+  , tn.cnt_tab				as tt_tab
+  , tn.cnt_sch || '.' || tn.cnt_tab		as tt_obj
+  , tk.kst_cols				as tt_cols
+  , tn.nat_sch				as tn_sch
+  , tn.nat_tab				as tn_tab
+  , tn.nat_sch || '.' || tn.nat_tab		as tn_obj
+  , fn.cnt_sch				as ft_sch
+  , fn.cnt_tab				as ft_tab
+  , fn.cnt_sch || '.' || fn.cnt_tab		as ft_obj
+  , tk.ksf_cols				as ft_cols
+  , fn.nat_sch				as fn_sch
+  , fn.nat_tab				as fn_tab
+  , fn.nat_sch || '.' || fn.nat_tab		as fn_obj
+  from	wm.fkeys_data		tk
+    join		wm.column_native	tn on tn.nat_sch = tk.kst_sch and tn.nat_tab = tk.kst_tab and tn.nat_col = tk.kst_cols[1]
+    join		wm.column_native	fn on fn.nat_sch = tk.ksf_sch and fn.nat_tab = tk.ksf_tab and fn.nat_col = tk.ksf_cols[1]
+  where	not tk.kst_sch in ('pg_catalog','information_schema');
+} -grant public -primary {conname}
+    
+# Information about foreign keys, listed as a separate record for every key component
+#-------------------------------------------
+view wm.fkey_data {} {
+  select
+      co.conname				as conname
+    , tn.nspname				as kyt_sch
+    , tc.relname				as kyt_tab
+    , ta.attname				as kyt_col
+    , co.conkey[s.a]			as kyt_field
+    , fn.nspname				as kyf_sch
+    , fc.relname				as kyf_tab
+    , fa.attname				as kyf_col
+    , co.confkey[s.a]			as kyf_field
+    , s.a					as key
+    , array_upper(co.conkey,1)		as keys
+  from			pg_constraint	co 
+    join		generate_series(1,10) s(a)	on true
+    join		pg_attribute	ta on ta.attrelid = co.conrelid  and ta.attnum = co.conkey[s.a]
+    join		pg_attribute	fa on fa.attrelid = co.confrelid and fa.attnum = co.confkey[s.a]
+    join		pg_class	tc on tc.oid = co.conrelid
+    join		pg_namespace	tn on tn.oid = tc.relnamespace
+    left join		pg_class	fc on fc.oid = co.confrelid
+    left join		pg_namespace	fn on fn.oid = fc.relnamespace
+  where co.contype = 'f';
+} -grant public -primary {conname}
+    
+# Information about foreign keys to public tables/views
+#-------------------------------------------
+view wm.fkey_pub {wm.fkey_data wm.column_native} {
+  select
+    kd.conname
+  , tn.cnt_sch				as tt_sch
+  , tn.cnt_tab				as tt_tab
+  , tn.cnt_sch || '.' || tn.cnt_tab		as tt_obj
+  , tn.cnt_col				as tt_col
+  , tn.nat_sch				as tn_sch
+  , tn.nat_tab				as tn_tab
+  , tn.nat_sch || '.' || tn.nat_tab		as tn_obj
+  , tn.nat_col				as tn_col
+  , fn.cnt_sch				as ft_sch
+  , fn.cnt_tab				as ft_tab
+  , fn.cnt_sch || '.' || fn.cnt_tab		as ft_obj
+  , fn.cnt_col				as ft_col
+  , fn.nat_sch				as fn_sch
+  , fn.nat_tab				as fn_tab
+  , fn.nat_sch || '.' || fn.nat_tab		as fn_obj
+  , fn.nat_col				as fn_col
+  , kd.key
+  , kd.keys
+  , case when exists (select * from wm.column_native where cnt_sch = tn.cnt_sch and cnt_tab = tn.cnt_tab and nat_sch = tn.nat_sch and nat_tab = tn.nat_tab and cnt_col != tn.cnt_col and nat_col = kd.kyt_col) then
+        tn.cnt_col
+    else
+        null
+    end						as unikey
+  , coalesce(vt.language, nt.language, 'en')	as language
+  , coalesce(vt.title, nt.title, tn.cnt_col)	as title
+  , coalesce(vt.help, nt.help)			as help
+
+  from	wm.fkey_data		kd
+    join		wm.column_native	tn on tn.nat_sch = kd.kyt_sch and tn.nat_tab = kd.kyt_tab and tn.nat_col = kd.kyt_col
+    join		wm.column_native	fn on fn.nat_sch = kd.kyf_sch and fn.nat_tab = kd.kyf_tab and fn.nat_col = kd.kyf_col
+    left join		wm.column_text vt	on vt.ct_sch = tn.cnt_sch and vt.ct_tab = tn.cnt_tab and vt.ct_col = tn.cnt_col
+    left join		wm.column_text nt	on nt.ct_sch = tn.nat_sch and nt.ct_tab = tn.nat_tab and nt.ct_col = kd.kyt_col
+  where	not kd.kyt_sch in ('pg_catalog','information_schema');
+} -grant public -primary {conname}
+    
+# View members of roles by name
+#-------------------------------------------
+view wm.role_members {} {
+  select ro.rolname as role, me.rolname  as member
+    from        	pg_auth_members am
+    join        	pg_authid       ro on ro.oid = am.roleid
+    join        	pg_authid       me on me.oid = am.member;
+} -primary {role member}
+
+# Show view columns that have ambiguous native tables
+#-------------------------------------------
+view wm.column_ambig {wm.view_column_usage wm.column_native} {select
+    cu.view_schema		as sch
+  , cu.view_name		as tab
+  , cu.column_name		as col
+  , cn.nat_exp		as spec
+  , count(*)		as count
+  , array_agg(cu.table_name::varchar order by cu.table_name desc)	as natives
+    from		wm.view_column_usage		cu
+    join		wm.column_native		cn on cn.cnt_sch = cu.view_schema and cn.cnt_tab = cu.view_name and cn.cnt_col = cu.column_name
+    where		view_schema not in ('pg_catalog','information_schema')
+    group by		1,2,3,4
+    having		count(*) > 1;
+} -primary {sch tab col}
