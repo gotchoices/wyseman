@@ -1,0 +1,9 @@
+X- Make this still build as a TCL run-time library
+- If wylib is installed, wysegi should run properly from ruby gem
+X- All files are:
+  X- part of ruby gem, 
+  X- part of TCL run-time lib, or
+  X- moved to ./old directory
+
+- Move wmd info into database
+- No local tcl library required to access prefs

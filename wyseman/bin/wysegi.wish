@@ -4,7 +4,7 @@
 set cnf(title) "Wyseman Graphical Interface"      ;#Dec 2009
 #TODO:
 #- 
-package require wyselib
+package require wylib
 
 #Preferences control array {tag title display_type user_edit}
 set cnf(pref)  {\

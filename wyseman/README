@@ -1,4 +1,5 @@
 Wyseman WYatt-erp SchEma MANager
+Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
 Kyle Bateman, November 2005
 
 Background
@@ -45,7 +46,7 @@ I was able to re-create the database exactly, but it proved difficult to
 modify it for the needs of the new enterprise except through a set
 of new alter commands.
 
-It finally occurred to me that the create/alter model of SQL assumes that 
+It finally occurred to me that the create/alter model of SQL assumes
 you are comfortable with the notion that the source for your model is
 contained within the working instance of the database yourself.  Any
 text files you create are merely temporary representations of the
@@ -65,7 +66,7 @@ capability on top of SQL.
 Eventually, I set out to create a tool for managing my schema definitions
 that would help me solve these and a few other problems.
 
-I determined that it would be best to have my source model contained in
+I determined it would be best to have my source model contained in
 text files rather than in the running instance of the database.  This
 would give me more control over my authoring content.  If I wanted to
 alter the model or create new instances, I could do it at any time
@@ -88,7 +89,7 @@ re-indexing the whole database from a single command.)
 
 I used m4 to pre-process my files, so I could begin to wrap bits of code
 in macros.  This allowed me to create more SQL from a smaller set of
-source code.  The result was that certain kinds of changes only needed
+source code.  The result was, certain kinds of changes only needed
 to be made in one place and the changes would propagate throughout the
 database.
 
@@ -98,9 +99,9 @@ dropped) in the right order.
 
 All this worked so well, I decided to take another crack at it and see
 if I could make it even better.  I decided to make it a part of my
-open-source ERP toolkit Wyatt-ERP and added a data-dictionary
-capability for storing more information about tables, columns and
-column values.  The result was Wyseman.
+open-source ERP toolkit Wyatt-ERP and added a data-dictionary capability 
+for storing more information about tables, columns and column values.  
+The result was Wyseman.
 
 I very much like the scripting capabilities of Tcl.  M4 had a number of
 problems that worked out much better in Tcl.  The Tcl list constructs
@@ -149,7 +150,7 @@ Program Description
 Wyseman is a collection of functions which draw on a series of database
 description files in order to setup and maintain a database schema in 
 postgresql.  No other database backend is currently supported. (Are there
-any others?)
+any others? :)
 
 The user is expected to author a set of schema files.  Each file contains
 Tcl code describing a number of definitions for objects (a table, view, 
@@ -612,7 +613,7 @@ Then, as part of the schema, you define a table called "priv."  In this
 table, you enter a user ID, a privilege, and one of three "access levels."
 The access levels are "limit," "user," and "super."
 
-These access levels can be defined any way you choose, but the typically
+These access levels can be defined any way you choose, but they typically
 mean the following:
 
 user:	This is the access level for a typical normal user of the given

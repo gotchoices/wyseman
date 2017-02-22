@@ -1,0 +1,71 @@
+#!/usr/bin/env ruby
+#Ruby command line app for managing a schema
+#TODO:
+#- Re-implement functionality from original tcl program
+#X-   Create database automatically as needed
+#X-   Create bootstrap schema automatically as needed
+#X-   Parse specified files, stick each object into database
+#-   Allow overloading of object names by type; how?
+#- Backend view including all dependencies, ancestors, depth column
+#- Backend function to refresh all stale objects
+#-   Check for dangling references in depends, grants
+#-   Check for orphaned objects
+#- 
+#-   Generate list of objects to be updated, by level
+#-   Allow to list all specified objects in a tree structure
+#- 
+#- Create object type for upgrading
+#- 
+#- How do we find orphan object, silently dropped from schema def files?
+#- Tincl goes away?
+#- Nincl?  Just specify LIKE wildcarding in branch?
+#- How to store wmd content in database, by table/column, automatic inheritance
+#- How to input/update migration scripts
+#- 
+#- 
+
+require 'optparse'
+require 'wyseman'
+require 'wyseman/db'
+
+options = {dry:nil, repl:nil, prune:false, warn:true, branch:'', tincl:'', texcl:'', nincl:'', nexcl:''}
+
+OptionParser.new do |opts|
+    opts.banner = "Usage: wyseman [options] source_file(s)"
+    opts.on('-?', '--help', 'Show help message') {puts opts; exit}
+    opts.on('-d', '--dry', 'Show what would happen, but make no actual changes') {options[:dry] = true}
+    opts.on('-r', '--replace', 'Replace views/functions where possible') {options[:repl] = true}
+    opts.on('-p', '--prune', 'Remove any objects no longer in the source file(s)') {options[:prune] = true}
+    opts.on('-n', '--nowarn', "Don't give warnings for dropping populated tables") {options[:warn] = false}
+    opts.on('-b', '--branch object', 'Include the specified object and all others that depend on it') {|v| options[:branch] = v}
+    opts.on('-z', '--zz xx', '') {options[:x] = y}
+end.parse!
+
+#p options; p ARGV		#Debug
+
+#Fixme: establish a working directory to put/get backups, make sure it exists
+#Fixme: do schema packages also go there?
+
+#Fixme: connect to postgres, make sure bootstrap and data dictionaries exist
+dbc = WysemanDB.new()
+
+wm = Wyseman.new				#Parse any specified input files
+ARGV.each {|f|
+#  dbc.x("delete from wm.objects where source = '#{f}';")	#Debug only!
+  wm.parse(f)
+}
+dbc.x('select wm.check_deps();')		#Formalize/check dependencies
+
+#Fixme: Then perform any specified operations:
+#	init: should now be done automatically
+#	create: automatically?
+#	drop database
+#	dump
+#	restore
+#	grant
+#	text
+#	lib
+#	list
+#	tree
+
+#Fixme: Refresh native cache: should now be done automatically by db

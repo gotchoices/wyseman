@@ -1,10 +1,10 @@
 #Build and maintain a data dictionary for wyseman schemas
 #---------------------------------------
-#include(Copyright)
+#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
 #TODO:
 #- 
 package require wylib
-package provide wyseman 0.40
+package provide wyseman 0.50
 
 namespace eval wmddict {
     namespace export tabtext schema bootstrap

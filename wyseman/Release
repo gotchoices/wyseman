@@ -1,13 +1,29 @@
-4	Release 4 (numbered 0.40)
+2017	Release 2.0
+	Converted main program to a ruby class which can be called from
+	the command line, or from a running program.  The sql create/drop 
+	code is first loaded into the database in a special schema area
+	and sql queries are used to produce the list of objects to rebuild
+	given a certain drop/create sequence.
+	
+	There is still a TCL run-time library "wyseman" that can be called
+	from TCL apps to access the data dictionary.  This is how wysegi
+	still works.  But when managing schema changes, TCL is now used
+	only to parse the schema description files.  Ruby is the glue to
+	hold the app together.  But most of the heavy lifting occurs right
+	in Postgresql.  For example, all schema items get dropped/rebuilt
+	in plpgsql so they are fully atomic.  If your table restore fails,
+	the drop gets rolled back too!
+
+2007?	Release 4 (numbered 0.40)
         Changed to allow objects to be created in postgres namespaces
         (schemas).  Many changes were made to the wyseman system catalog
         tables and columns.  The interface for user programs should have
         remained largely the same.
 
-3	Release 3	
+2006?	Release 3	
         Many bug fixes, many feature additions
 
-2	Release 2	
+2005?	Release 2	
 	This release is updated for use with Postgres 8.1.0 which changed
 	fundamentally the way users and groups exist in the database.
 	Users and groups (roles) are now stored in the same table (pg_roles).
@@ -33,5 +49,4 @@
 	initialize the sequences to their proper values.  This is shown in
 	the sample schema as "make sequence".
 
-1	Release 1
-	Initial open-source release of version 0.30
+2005?	Initial open-source release of version 0.30
