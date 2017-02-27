@@ -13,12 +13,18 @@ class WysemanDB < PG::Connection
     begin
       @dbc = super(*args)
     rescue PG::ConnectionBad					#If can't connect
-      db = PG::Connection.new(*args, dbname:'template1')
-      uname = db.exec("select current_user;").getvalue(0,0)	#Get my PG username
-      db.exec "create database " + q(uname)			#Create my database
+      (args[-1] = (oldh = args[-1]).dup)[:dbname] = 'template1'
+      db = PG::Connection.new(*args)				#Connect to template db
+      oldh[:dbname] = db.exec("select current_user;").getvalue(0,0) if !oldh[:dbname]	#Get my PG username if no username specified explicitly
+      db.exec "create database " + q(oldh[:dbname])		#Create my database
       db.close
-      @dbc = super(*args, dbname:uname)				#And try reconnecting
+      args[-1] = oldh
+      @dbc = super(*args)				#And try reconnecting
     end
+
+    @dbc.set_notice_receiver { |res|
+      puts res.error_message().split("\n")[0];		#Strip out any CONTEXT: lines
+    }
       
     begin
       one("select count(*) from wm.objects;")		#If bootstrap schema doesn't exist
@@ -29,8 +35,8 @@ class WysemanDB < PG::Connection
   def x(query)						#Short-hand for exec
       exec(query)
   end
-  def t(query)						#Short-hand for exec
-      exec(query)
+  def t(query)						#Exec query as atomic transaction
+      transaction { |c| c.exec(query)}
   end
   def e(str)						#Short-hand for escaping sql
       escape_string (str)

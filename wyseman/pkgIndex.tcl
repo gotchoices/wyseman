@@ -2,6 +2,5 @@
 
 package ifneeded wyseman 0.50 [list set wyseman_library $dir]\n[list tclPkgSetup $dir wyseman 0.50 {
     {erd.tcl	source {::erd::erd }}
-    {wmddict.tcl	source {::wmddict::tabtext ::wmddict::schema ::wmddict::bootstrap }}
-    {wmdd.tcl	source {::wmdd::errtext ::wmdd::table ::wmdd::type ::wmdd::column ::wmdd::columns ::wmdd::value ::wmdd::pkey ::wmdd::tables_ref ::wmdd::table_parts ::wmdd::columns_fk }}
+    {wmdd.tcl	source {::wmdd::style ::wmdd::errtext ::wmdd::table ::wmdd::type ::wmdd::column ::wmdd::columns ::wmdd::value ::wmdd::pkey ::wmdd::tables_ref ::wmdd::table_parts ::wmdd::columns_fk }}
 }]

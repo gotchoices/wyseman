@@ -19,9 +19,9 @@ INSTDIR=${LIBDIR}/${PKGNAME}
 
 all: pkgIndex.tcl
 
-pkgIndex.tcl: wmddict.tcl wmdd.tcl
+pkgIndex.tcl: erd.tcl wmdd.tcl
 	wmmkpkg ${LIBNAME} ${VERSION}
-#	echo "pkg_mkIndex -lazy . erd.tcl wmddict.tcl wmdd.tcl" | tclsh
+#	echo "pkg_mkIndex -lazy . erd.tcl wmdd.tcl" | tclsh
 
 install: all
 	if ! [ -d ${INSTDIR} ] ; then mkdir ${INSTDIR} ; fi

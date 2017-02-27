@@ -1,71 +1,57 @@
 #!/usr/bin/env ruby
 #Ruby command line app for managing a schema
 #TODO:
-#- Re-implement functionality from original tcl program
-#X-   Create database automatically as needed
-#X-   Create bootstrap schema automatically as needed
-#X-   Parse specified files, stick each object into database
-#-   Allow overloading of object names by type; how?
-#- Backend view including all dependencies, ancestors, depth column
-#- Backend function to refresh all stale objects
-#-   Check for dangling references in depends, grants
-#-   Check for orphaned objects
-#- 
-#-   Generate list of objects to be updated, by level
-#-   Allow to list all specified objects in a tree structure
-#- 
-#- Create object type for upgrading
-#- 
-#- How do we find orphan object, silently dropped from schema def files?
-#- Tincl goes away?
-#- Nincl?  Just specify LIKE wildcarding in branch?
-#- How to store wmd content in database, by table/column, automatic inheritance
-#- How to input/update migration scripts
-#- 
+#- How to input/update table migration scripts
+#- Implement:
+#-   Generate sql to build database to a specified release specification
+#-   Generate sql to upgrade existing database to a specified release specification
+#-   Dump selected, or all tables
+#-   Restore selected or all tables
+#-   List database objects in dependency/tree order
 #- 
 
 require 'optparse'
+require 'fileutils'
 require 'wyseman'
 require 'wyseman/db'
 
-options = {dry:nil, repl:nil, prune:false, warn:true, branch:'', tincl:'', texcl:'', nincl:'', nexcl:''}
+opts = {test:nil, dbname:nil, host:'localhost', repl:nil, prune:false, drop:true, make:true, branch:'', work:'/var/tmp/wyseman'}
 
-OptionParser.new do |opts|
-    opts.banner = "Usage: wyseman [options] source_file(s)"
-    opts.on('-?', '--help', 'Show help message') {puts opts; exit}
-    opts.on('-d', '--dry', 'Show what would happen, but make no actual changes') {options[:dry] = true}
-    opts.on('-r', '--replace', 'Replace views/functions where possible') {options[:repl] = true}
-    opts.on('-p', '--prune', 'Remove any objects no longer in the source file(s)') {options[:prune] = true}
-    opts.on('-n', '--nowarn', "Don't give warnings for dropping populated tables") {options[:warn] = false}
-    opts.on('-b', '--branch object', 'Include the specified object and all others that depend on it') {|v| options[:branch] = v}
-    opts.on('-z', '--zz xx', '') {options[:x] = y}
+OptionParser.new do |op|
+    op.banner = "Usage: wyseman [opts] source_file(s)"
+    op.on('-?', '--help', 'Show help message') {puts opts; exit}
+    op.on('-n', '--dbname=name', 'Specify the database name explicitly (rather than defaulting to the username)') {|v| opts[:dbname] = v}
+    op.on('-h', '--host=name', 'Specify the database host name explicitly (rather than defaulting to the username)') {|v| opts[:host] = v}
+    op.on('-r', '--replace', 'Replace views/functions where possible') {opts[:repl] = true}
+    op.on('-m', '--[no-]make', 'Build any uninstantiated objects in the database') {|v| opts[:make] = v}
+    op.on('-p', '--[no-]prune', 'Remove any objects no longer in the source file(s)') {|v| opts[:prune] = v}
+    op.on('-d', '--[no-]drop', 'any objects no longer in the source file(s)') {|v| opts[:drop] = v}
+    op.on('-b', '--branch=object', 'Include the specified object and all others that depend on it') {|v| opts[:branch] += v + ' '}
+#    op.on('-w', '--work=dir', '') {|v| opts[:work] = v}
+#    op.on('-t', '--test', 'Show what would happen, but make no actual changes') {opts[:test] = true}
+#    op.on('-n', '--nowarn', "Don't give warnings for dropping populated tables") {opts[:warn] = false}
+#    op.on('-z', '--zz xx', '') {|v| opts[:x] = v}
 end.parse!
+#p 'Opts:',opts; p 'Args:',ARGV			#Debug
 
-#p options; p ARGV		#Debug
+#Fixme: turn back on when dump/restore implemented
+#FileUtils::mkdir_p opts[:work]			#Make sure working directory exists
 
-#Fixme: establish a working directory to put/get backups, make sure it exists
-#Fixme: do schema packages also go there?
+dbc = WysemanDB.new(dbname:opts[:dbname], host:opts[:host])	#Connect to postgres, will make sure bootstrap/ddict exists
 
-#Fixme: connect to postgres, make sure bootstrap and data dictionaries exist
-dbc = WysemanDB.new()
+if ARGV.length > 0
+  wm = Wyseman.new				#Initialize the parser
+  ARGV.each {|f| wm.parse(f)}			#Parse the specified input files
+  wm.check(opts[:prune])			#And do post-cleanup
+end
 
-wm = Wyseman.new				#Parse any specified input files
-ARGV.each {|f|
-#  dbc.x("delete from wm.objects where source = '#{f}';")	#Debug only!
-  wm.parse(f)
-}
-dbc.x('select wm.check_deps();')		#Formalize/check dependencies
+if opts[:branch] == ''				#If no branches specified
+  brval = 'null'				#Default to all dirty objects
+else
+  brval = "'{" + opts[:branch].strip.split(' ').join(',') + "}'"
+end
 
-#Fixme: Then perform any specified operations:
-#	init: should now be done automatically
-#	create: automatically?
-#	drop database
-#	dump
-#	restore
-#	grant
-#	text
-#	lib
-#	list
-#	tree
-
-#Fixme: Refresh native cache: should now be done automatically by db
+#Instantiate specified, or default objects in the database, with optional pre-drop
+if opts[:make] 
+  dbc.x("select case when wm.make(#{brval},#{opts[:drop]},true) > 0 then wm.init_dictionary() end;")		#Make objects/dictionary
+end
