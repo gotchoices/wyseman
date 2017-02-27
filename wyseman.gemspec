@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
   s.name        = 'wyseman'
   s.version     = '0.5'
-  s.date        = '2016-02-08'
+  s.date        = '2017-02-08'
   s.summary     = "WyattERP Schema Manager"
   s.description = "An application for managing an SQL schema in PostgreSQL"
   s.authors     = ["Kyle Bateman"]
@@ -31,6 +31,7 @@ Gem::Specification.new do |s|
 ]
   s.executables << 'wyseman' << 'wysegi' << 'wmmkpkg' << 'wmrelease' << 'wmversion'
   s.homepage    = 'http://wyatterp.org/wyseman'
-  s.requirements << 'Tcl installed if you want to run wysegi'
+  s.requirements << 'Postgresql'
+  s.requirements << 'Tcl/Tk, Tcl-PG installed if you want to run wysegi'
   s.license       = 'GPL-3.0'
 end
