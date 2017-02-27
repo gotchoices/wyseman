@@ -14,8 +14,9 @@
 #X- Test replacing view/rules (old cnf(repl) replace switch)
 #X- After PG8.2, sequences have a usage priv (rather than only select,update)
 #X- Also many other privs in latest postgresql
+#X- Test tabtext (no handler yet)
 #- 
-#- Test tabtext (no handler yet)
+#- What if I define text for a nonexistent table or column?
 #- Test tabdef, store defaults in database (no handler yet)
 #- 
 #- Re-create tcl parts in another file, make tcl version work again? (probably not)
@@ -36,7 +37,7 @@ namespace eval wmparse {
     foreach i $v(objs) {$v(int) alias $i wmparse::$i}
     $v(int) alias def def
 
-    set v(swar) {{name 2} {dependency 2 dep} {create 2} {drop 2} {grant 2} {version 1 vers} {text 1}}
+    set v(swar) {{name 2} {dependency 2 dep} {create 2} {drop 2} {grant 2} {text 1}}
     set v(snar) {name dep create drop grant}
     
     variable ob			;#holds info about each object
@@ -46,9 +47,9 @@ namespace eval wmparse {
 
 # Record the module name for any defined objects
 #------------------------------------------------------------
-proc wmparse::module {m} {
+proc wmparse::module {args} {
     variable v
-    set v(module) $m
+    set v(module) $args
 }
 
 # Read and interpret the specified file
@@ -167,8 +168,7 @@ proc wmparse::object {obj args} {
 #    if {$v(abort)} {return -code return {}}
     argform $v(snar) args
     argnorm $v(swar) args
-    foreach tag {name dep create drop grant vers} {set $tag [string trim [xswitchs $tag args]]}
-    if {$vers == {}} {set vers 0}
+    foreach tag {name dep create drop grant} {set $tag [string trim [xswitchs $tag args]]}
     if {[llength $args] > 0} {error "Unrecognized parameters: $args"}
 #    set drop [string trim $drop]
 #    if {$create == {}} {error "Not enough parameters for $obj: $name"; return}
@@ -179,7 +179,7 @@ proc wmparse::object {obj args} {
     } elseif {[string range $drop 0 0] == {@}} {
         set drop "[string range $drop 1 end]; drop $obj if exists $name"
     }
-    if {![regexp {.*;$} $drop] && ![regexp {wm\.vers\(} $drop]} {append drop {;}}
+    if {![regexp {.*;$} $drop]} {append drop {;}}
 
     regsub -all {([\n;,])[ \t]*--[^\n]*} $create {\1} create	;#strip sql comments
 
@@ -194,22 +194,31 @@ proc wmparse::object {obj args} {
         if {$oo == {}} {
             lappend deps $tt
         } else {
-            set tt [unabbrev {{table 2} {view 1} {sequence 2} {index 1} {function 1} {trigger 2} {rule 1} {schema 2} {other 1}} $tt]
+            set tt [unabbrev {{table 1} {view 1} {sequence 2} {index 1} {function 1} {trigger 2} {rule 1} {schema 2} {other 1}} $tt]
             lappend deps "${tt}:$oo"
         }
     }
 
-    hand_object $name $obj $vers $v(module) [join $deps { }] $create $drop
+    hand_object $name $obj $v(module) [join $deps { }] $create $drop
 
     set ob($name.create) $create			;#code to create object
     set ob($name.drop)   $drop				;#code to destroy object
     set ob($name.obj)    $obj				;#the object type (table, func, etc.)
-    set ob($name.vers)   $vers				;#version of the object
-    set ob($name.text)   {}				;#data from tabtext object
-    set ob($name.defs)   {}				;#default display data from tabdef object
-    set ob($name.grant)  {}				;#contains actual grant sql code
     set ob($name.file)   $v(fname)			;#the source file this object was found in
 #puts " file:$v(fname)"
+
+    if {[info exists ob($name.prims)] && $ob($name.prims) != {}} {	;#Explicit primary key definition
+        hand_pkey $name $obj [join $ob($name.prims)]
+    }
+
+    if {[info exists ob($name.cnats)]} {
+        foreach cnat $ob($name.cnats) {			;#process any column natives
+            foreach col [lassign $cnat nat] {
+                if {[llength $col] > 1} {lassign $col col ncol} else {set ncol $col}
+                hand_cnat $name $obj $col $nat $ncol
+            }
+        }
+    }
 
 #Parse grants for the object, producing grant SQL:
     set grant [macsub $grant]				;#substitute any macros
@@ -272,12 +281,12 @@ proc wmparse::view {args} {
     if {[set nats [xswitchs native args]] != {}} {
         foreach nat $nats {			;#can specify multiple native records
 #puts "Nat:$nat"
-            lappend ob(cnats) [eval list $name [macsub $nat]]
+            lappend ob($name.cnats) [macsub $nat]
         }
     }
     if {[set prims [xswitchs prim args]] != {}} {
 #puts "Prims:$prims"
-        lappend ob(prims) [list $name [macsub $prims]]
+        set ob($name.prims) [macsub $prims]
     }
     eval object view \$name \$dep \$create \$drop $args
     if {$text != {}} {tabtext $name {*}$text}
@@ -451,26 +460,6 @@ proc wmparse::grant {group perms} {
     }
 }
 
-# Handle a structure containing table text information
-#------------------------------------------------------------
-proc wmparse::tabtext {name args} {
-    variable ob
-    if {![lcontain $ob(names) $name]} {error "Can not define text information for non-existent table: $name"; return}
-    set ob($name.text) [eval wmddict::tabtext $name $args]
-#puts "name:$name text:$ob($name.text)"
-}
-
-# Handle a structure containing table default view information
-# If args == {}, return the default view info for the given table
-#------------------------------------------------------------
-proc wmparse::tabdef {name args} {
-    variable ob
-#puts "tabdef name:$name args:$args"
-    if {$args == {} && [info exists ob($name.defs)]} {return $ob($name.defs)}
-    if {![lcontain $ob(names) $name]} {error "Can not define default view information for non-existent table: $name"; return}
-    set ob($name.defs) $args
-}
-
 # Return the specified information field for this object
 #------------------------------------------------------------
 proc wmparse::field {name {field dep}} {
@@ -478,4 +467,89 @@ proc wmparse::field {name {field dep}} {
     if {![lcontain $ob(names) $name]} {err "object: $name not found looking for field: $field"; return}
     if {![info exists ob($name.$field)]} {err "field $field not found for object: $name"; return}
     return $ob($name.$field)
+}
+
+# Split a table object into {schema table}, include public if no schema given
+#------------------------------------------------------------
+proc wmparse::table_parts {table {join {}}} {
+    lassign [split $table .] sch tab
+    if {$tab == {}} {set ret [list public $sch]} else {set ret [list $sch $tab]}
+    if {$join != {}} {return [join $ret $join]} else {return $ret}
+}
+
+# Handle a structure containing table text information
+#------------------------------------------------------------
+proc wmparse::tabtext {table args} {
+    argform {title help fields} args
+    argnorm {{title 2} {help 2} {language 2} {fields 1} {errors 2}} args
+    lassign [table_parts $table] schema table
+    array set ca {language en}
+    foreach tag {language} {xswitchs $tag args ca($tag)}
+    foreach tag {title help fields errors} {set ca($tag) [regsub -all {'} [wmparse::macsub [xswitchs $tag args]] {''}]}
+    set    query "delete from wm.table_text  where tt_sch = '$schema' and tt_tab = '$table' and language = '$ca(language)';\n"
+    append query "delete from wm.column_text where ct_sch = '$schema' and ct_tab = '$table' and language = '$ca(language)';\n"
+    append query "delete from wm.value_text  where vt_sch = '$schema' and vt_tab = '$table' and language = '$ca(language)';\n"
+    append query "delete from wm.error_text  where et_sch = '$schema' and et_tab = '$table' and language = '$ca(language)';\n"
+    if {$ca(title) != {} || $ca(help) != {}} {
+        append query "insert into wm.table_text (tt_sch,tt_tab,language,title,help) values ('$schema','$table','$ca(language)','$ca(title)',E'$ca(help)');\n"
+    }
+
+    foreach rec $ca(fields) {			;#for each column
+        argform {column title help subfields} rec
+        argnorm {{column 2} {title 2} {help 2} {subfields}} rec
+        foreach tag {column title help subfields} {set cf($tag) [xswitchs $tag rec]}
+        append query "insert into wm.column_text (ct_sch,ct_tab,ct_col,language,title,help) values ('$schema','$table','$cf(column)','$ca(language)','$cf(title)',E'$cf(help)');\n"
+
+        foreach srec $cf(subfields) {		;#for each subfield
+            argform {value title help} srec
+            argnorm {{value 1} {title 1} {help 1}} srec
+            foreach tag {value title help} {set cs($tag) [xswitchs $tag srec]}
+            append query "insert into wm.value_text (vt_sch,vt_tab,vt_col,value,language,title,help) values ('$schema','$table','$cf(column)','$cs(value)','$ca(language)','$cs(title)',E'$cs(help)');\n"
+        }
+    }
+
+    foreach rec $ca(errors) {			;#for each column
+        argform {code title help} rec
+        argnorm {{code 2} {title 2} {help 2}} rec
+        foreach tag {code title help} {set ce($tag) [xswitchs $tag rec]}
+        append query "insert into wm.error_text (et_sch,et_tab,code,language,title,help) values ('$schema','$table','$ce(code)','$ca(language)','$ce(title)','$ce(help)');\n"
+    }
+    hand_query $table $query
+}
+
+# Handle a structure containing table default view information
+# If args == {}, return the default view info for the given table
+#------------------------------------------------------------
+proc wmparse::tabdef {table args} {
+    variable ob
+#puts "tabdef name:$name args:$args"
+#    if {$args == {} && [info exists ob($name.defs)]} {return $ob($name.defs)}
+#    if {![lcontain $ob(names) $name]} {error "Can not define default view information for non-existent table: $name"; return}
+#    set ob($name.defs) $args
+
+    argform {focus fields} args
+    argnorm {{focus 2} {fields 1}} args
+    lassign [table_parts $table] schema table
+
+    set fargs [xswitchs fields args]		;#grab the field arguments
+
+    set    query "delete from wm.table_style where ts_sch = '$schema' and ts_tab = '$table';\n"
+    append query "delete from wm.column_style where cs_sch = '$schema' and cs_tab = '$table';\n"
+    
+    foreach {sw va} $args {
+        if {[string range $sw 0 0] != {-}} {error "Expected switch: $sw"}
+        append query "insert into wm.table_style (ts_sch,ts_tab,sw_name,sw_value) values ('$schema','$table','[string range $sw 1 end]','[regsub {'} $va {''}]');\n"
+    }
+
+    foreach fa $fargs {			;#for each column
+        set fa [lassign $fa tag]
+        argform {style size sub} fa		;#add switch names to all args
+#        argnorm {{column 2} {title 2} {help 2} {subframe}} fa
+
+        foreach {sw va} $fa {
+            if {[string range $sw 0 0] != {-}} {error "Expected switch: $sw"}
+            append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) values ('$schema','$table','$tag','[string range $sw 1 end]','[regsub {'} $va {''}]');\n"
+        }
+    }
+    hand_query $table $query
 }

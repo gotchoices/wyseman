@@ -12,9 +12,32 @@ package require wylib
 package provide wyseman 0.50
 
 namespace eval wmdd {
-    namespace export errtext table type column columns value pkey tables_ref table_parts columns_fk
+    namespace export style errtext table type column columns value pkey tables_ref table_parts columns_fk
     variable v
     set v(lang) {en}
+}
+
+# Return table or column default styles
+#------------------------------------------------------------
+proc wmdd::style {table {column {}}} {
+    variable v
+    set idx "column:$table:$column"
+#puts "style table:$table column:$column idx:$idx"
+    lassign [wmdd::table_parts $table] sch tab
+    if {![info exists v($idx)]} {
+        set switches {}
+        if {$column == {}} {
+            set ql [sql::qlist "select sw_name, sw_value from wm.table_style where ts_sch = '$sch' and ts_tab = '$tab'"]
+        } else {
+            set ql [sql::qlist "select sw_name, sw_value from wm.column_style where cs_sch = '$sch' and cs_tab = '$tab' and cs_col = '$column'"]
+        }
+        foreach rec $ql {
+            lassign $rec sw va
+            lappend v($idx) "-$sw" "$va"
+        }
+        if {![info exists v($idx)]} {error "Can't find data for table:$table, column:$column"; return {}}
+    }
+    return $v($idx)
 }
 
 # Return name of an oid column (typically _oid) for a view

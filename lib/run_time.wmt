@@ -27,7 +27,7 @@ tabtext wm.value_text	{Value Text}	{Contains a description for the values which 
     {help		{Description}	{A longer description of what it means when the column is set to this value}}
 }
 
-tabtext wm.error_text	{{Value Text}	{Contains a description for the values which certain columns may be set to.  Used only for columns that can be set to one of a finite set of values (like an enumerated type).} {
+tabtext wm.error_text	{Value Text}	{Contains a description for the values which certain columns may be set to.  Used only for columns that can be set to one of a finite set of values (like an enumerated type).} {
     {vt_sch		{Schema Name}	{The schema of the table this column belongs to}}
     {vt_tab		{Table Name}	{The name of the table this column is in}}
     {vt_col		{Column Name}	{The name of the column whose values are being described}}
