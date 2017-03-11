@@ -1,4 +1,52 @@
 #Text descriptions for meta-data tables
+#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
+
+tabtext wm.releases	{Releases}	{Tracks the version number of each public release of the database design} {
+    {release		{Release}	{The integer number of the release, starting with 1.  The current number in this field always designates a work-in-progress.  The number prior indicates the last public release.}}
+    {crt_date		{Created}	{When this record was created.  Indicates when development started on this release (And the prior release was frozen).}}
+    {sver_1		{BS Version}	{Dummy column with a name indicating the version of these bootstrap tables (which can't be managed by wyseman themselves).}}
+}
+
+tabtext wm.objects	{Objects}	{Keeps data on database tables, views, functions, etc. telling how to build or drop each object and how it relates to other objects in the database.} {
+    {obj_typ		{Type}		{The object type, for example: table, function, trigger, etc.}}
+    {obj_nam		{Name}		{The schema and name of object as known within that schema}}
+    {obj_ver		{Version}	{A sequential integer showing how many times this object has been modified, as a part of an official release.  Changes to the current (working) release do not increment this number.}}
+    {checked		{Checked}	{This record has had its dependencies and consistency checked}}
+    {clean		{Clean}		{The object represented by this record is built and current according to this create script}}
+    {module		{Module}	{The name of a code module (package) this object belongs to}}
+    {mod_ver		{Mod Vers}	{The version of the code module, or package this object belongs to}}
+    {source		{Source}	{The basename of the external source code file this object was parsed from}}
+    {deps		{Depends}	{A list of un-expanded dependencies for this object, exactly as expressed in the source file}}
+    {ndeps		{Normal Deps}	{An expanded and normalized array of dependencies, guaranteed to exist in another record of the table}}
+    {grants		{Grants}	{The permission grants found, applicable to this object}}
+    {col_data		{Display}	{Switches found, expressing preferred display characteristics for columns, assuming this is a view or table object}}
+    {crt_sql		{Create}	{The SQL code to build this object}}
+    {drp_sql		{Drop}		{The SQL code to drop this object}}
+    {min_rel		{Minimum}	{The oldest release this version of this object belongs to}}
+    {max_rel		{Maximum}	{The latest release this version of this object belongs to}}
+    {crt_date		{Created}	{When this object record was first created}}
+    {mod_date		{Modified}	{When this object record was last modified}}
+}
+
+tabtext wm.objects_v	{Rel Objects}	{An enhanced view of the object table, expanded by showing the full object specifier, and each separate release this version of the object belongs to} {
+    {object		{Object}	{Full type and name of this object}}
+    {release		{Release}	{A release this version of the object belongs to}}
+} -inherits wm.objects
+
+tabtext wm.objects_v_depth {Dep Objects}	{An enhanced view of the object table, expanded by showing the full object specifier, each separate release this version of the object belongs to, and the maximum depth it is along any path in the dependency tree.} {
+    {depth		{Max Depth}	{The maximum depth of this object along any path in the dependency tree}}
+} -inherits wm.objects
+
+tabtext wm.depends_v	{Dependencies}	{A recursive view showing which database objects depend on (must be created after) other database objects.} {
+    {object		{Object}	{Full object type and name (type:name)}}
+    {obj_typ		{Type}		{Function, view, table, etc}}
+    {obj_nam		{Name}		{Schema and name of object as known within that schema}}
+    {depend		{Depends On}	{Another object that must be created before this object}}
+    {release		{Release}	{The release this object belongs to}}
+    {depth		{Depth}		{The depth of the dependency tree, when following this particular dependency back to the root.}}
+    {path		{Path}		{The path of the dependency tree above this object}}
+    {fpath		{Full Path}	{The full path of the dependency tree above this object (including this object).}}
+}
 
 tabtext wm.table_text	{Table Text}	{Contains a description of each table in the system} {
     {tt_sch		{Schema Name}	{The schema this table belongs to}}
