@@ -5,6 +5,7 @@ set cnf(title) "Wyseman Graphical Interface"      ;#Dec 2009
 #TODO:
 #- 
 package require wylib
+package require wyselib
 
 #Preferences control array {tag title display_type user_edit}
 set cnf(pref)  {\
@@ -97,9 +98,10 @@ proc init_table {table {force 0}} {
     lassign [sql::one "select title,tab_kind,help from wm.table_pub where obj = '$table'"] cnf(title.$table) cnf(tab_kind.$table) cnf(help.$table)
     foreach rec [sql::qlist "select field,col,title,type,length,pkey,help from wm.column_pub where obj = '$table' order by field;"] {
         lassign $rec field col title type length pkey help
-        lappend cnf(pflist.$table) -f [list $col $title -help $help]
+        lappend cnf(pflist.$table) -f [list $col $title -help "$title ($col):\n$help"]
         if {$type == {bool}} {set et {chk}} else {set et {ent}}
-        lappend cnf(eflist.$table) -f [list $col -style $et -size $cnf(ewid) -state normal -write 1 -hide 0 -spf {} -opt 0 -sub "0 $field" -title $title -help $help]
+        lappend cnf(eflist.$table) -f [concat [list $col -style $et -size $cnf(ewid) -state normal -write 1 -hide 0 -spf {} -opt 0 -sub "0 $field" -title $title -help "$title ($col):\n$help"] [wmdd::style $table $col]]
+#puts "eflist($table):$cnf(eflist.$table)"
         if {$pkey == {t}} {lappend cnf(pk.$table) $col}
     }
     if {[info exists cnf(pk.$table)]} {
