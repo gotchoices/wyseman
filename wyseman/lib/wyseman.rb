@@ -1,14 +1,13 @@
 #Ruby interface to Schema Manager functions
+#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
 #TODO:
 #X- Warn if same object defined twice in same run
-#- Make this work good enough for MyCHIPs for now
-#- Implement classes to do database builds/updates from command line or from app
-#- Implement run-time libs in ruby classes
+#X- Make this work good enough for MyCHIPs for now
+#- What if I define text for a nonexistent table or column?
+#- An application can initialize its own database
+#- Implement run-time libs in ruby classes (ruby/tk?)
 #- Module versions vs/ object versions (see TODOs in bootstrap.sql)
 #- Code/schema to commit schema versions
-#- 
-#- Try building wyselib schema as a module
-#- Build cattle schema on top of it with separate module
 #- 
 #- More TODOs in wmparse.tcl (implement text, defaults)
 #- 
@@ -16,23 +15,26 @@
 require 'tcltklib'	#See: https://github.com/ruby/tk/blob/master/MANUAL_tcltklib.eng
 require 'wyseman/db'
 
+module Wyseman
+
 #Parse tcl schema descriptions and manipulate their objects in the database
 # -----------------------------------------------------------------------------
-class Wyseman
+class Session
   @@callbacks = {}	#Hash of callbacks for each instance
   
   def self.callback(idx)
     idx ? @@callbacks[idx] : @@callbacks
   end
   
-  def initialize(dbname:nil)
+  def initialize(db)
+    @db = db						#Remember our database connection
     @tclip = TclTkIp.new(nil, false)
     @fname = ''
     @ss = self.to_s[2..-2]				#Make hash index, unique to this instance
 #printf("Self:%s\n", @ss)
     @@callbacks[@ss] = Proc.new {|a,b,c,d,e,f,g| results(a,b,c,d,e,f,g)}	#Store a callback proc for this instance
 
-    cbname = "Wyseman.callback(#{@ss.inspect}).call"	#Make handler calls in tcl for each kind of sql thing
+    cbname = "Wyseman::Session.callback(#{@ss.inspect}).call"	#Make handler calls in tcl for each kind of sql thing
     @tclip._eval("proc hand_object {name obj mod deps create drop} {eval [list set ::create $create]; eval [list set ::drop $drop]; eval [list ruby #{cbname}('[join [list object $name $obj $mod $deps ::create ::drop] {','}]')]}")
     @tclip._eval("proc hand_priv {name obj lev group give} {eval [list ruby #{cbname}('[join [list priv $name $obj $lev $group $give] {','}]')]}")
     @tclip._eval("proc hand_query {name query} {eval [list set ::query $query]; eval [list ruby #{cbname}('[join [list sql $name ::query] {','}]')]}")
@@ -46,12 +48,12 @@ class Wyseman
         raise "Error parsing file: " + f + ".tcl"
       end
     }
-    @db = WysemanDB.new(dbname:dbname)			#Connect to the database
     
     if !@db.one("select obj_nam from wm.objects where obj_typ = 'table' and obj_nam = 'wm.table_text'")[0]	#If run_time schema not loaded yet
       parse File.join(File.dirname(__FILE__), 'run_time.wms')		#Parse it
       @db.x("select wm.check_all(), wm.make(null, false, true);")	#And build it
       parse File.join(File.dirname(__FILE__), 'run_time.wmt')		#Read text descriptions
+      parse File.join(File.dirname(__FILE__), 'run_time.wmd')		#Read display switches
     end
 
     @db.x('delete from wm.objects where obj_ver <= 0;')	#Remove any failed working entries
@@ -68,14 +70,14 @@ class Wyseman
           if deps == ''
             deparr = '{}'
           else
-            deparr = %Q{{"#{@db.e(deps.split(' ').join('","'))}"}}
+            deparr = %Q{{"#{@db.esc(deps.split(' ').join('","'))}"}}
           end
-          sql = %Q{insert into wm.objects (obj_typ, obj_nam, deps, module, source, crt_sql, drp_sql) values ('#{obj}', '#{@db.e(name)}', '#{@db.e(deparr)}', '#{@db.e(mod)}', '#{@db.e(@fname)}', '#{@db.e(create)}', '#{@db.e(drop)}');}
+          sql = %Q{insert into wm.objects (obj_typ, obj_nam, deps, module, source, crt_sql, drp_sql) values ('#{obj}', '#{@db.esc(name)}', '#{@db.esc(deparr)}', '#{@db.esc(mod)}', '#{@db.esc(@fname)}', '#{@db.esc(create)}', '#{@db.esc(drop)}');}
 
         when 'priv'
           name, obj, lev, group, give = args
 #printf("PRIV name:%s obj:%s lev:%s group:%s give:%s\n", name, obj, lev, group, give)
-          sql = %Q{select wm.grant('#{@db.e(obj)}', '#{@db.e(name)}', '#{@db.e(group)}', #{lev}, '#{@db.e(give)}');}
+          sql = %Q{select wm.grant('#{@db.esc(obj)}', '#{@db.esc(name)}', '#{@db.esc(group)}', #{lev}, '#{@db.esc(give)}');}
 
         when 'pkey'				#Should only be one of these, at col_dat[1]
           name, obj, cols  = args
@@ -107,13 +109,22 @@ class Wyseman
     end
   end
   
-  def parse (fname)
-    @fname = File.basename(fname)
-    @tclip._eval("wmparse::parse " + fname)
+  def parse (fname)				#Parse a wyseman file
+    if File.extname(fname) == '.wmi'
+      return `PATH=".:$PATH" #{fname}`		#Execute specified init file, capture sql
+    end
+    begin
+      @tclip._eval("wmparse::parse " + fname)
+    rescue Exception => e
+      $stderr.puts e.message
+      return nil
+    end
+    return ''
   end
 
   def check (prune = true)
     @db.t("select case when wm.check_drafts(#{prune}) then wm.check_deps() end;")	#Check versions/dependencies
   end
 
-end
+end	#class Session
+end	#module Wyseman

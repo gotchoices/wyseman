@@ -1,6 +1,6 @@
 # Misc functions that don't really have a good home and are not in a namespace
 #------------------------------------------
-#Copyright WyattERP, all other rights reserved
+#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
 
 # Find shortcut arguments (missing their switch) and add it in
 #------------------------------------------
