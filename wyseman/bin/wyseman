@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 #Ruby command line app for managing a schema
 #TODO:
+#- Implement initialization files .wmi
 #- How to input/update table migration scripts
 #- Implement:
 #-   Generate sql to build database to a specified release specification
@@ -15,7 +16,7 @@ require 'fileutils'
 require 'wyseman'
 require 'wyseman/db'
 
-opts = {test:nil, dbname:nil, host:'localhost', repl:nil, prune:false, drop:true, make:true, branch:'', work:'/var/tmp/wyseman'}
+opts = {test:nil, dbname:nil, host:'localhost', repl:nil, prune:true, drop:true, post:true, make:true, branch:'', work:'/var/tmp/wyseman'}
 
 OptionParser.new do |op|
     op.banner = "Usage: wyseman [opts] source_file(s)"
@@ -25,7 +26,8 @@ OptionParser.new do |op|
     op.on('-r', '--replace', 'Replace views/functions where possible') {opts[:repl] = true}
     op.on('-m', '--[no-]make', 'Build any uninstantiated objects in the database') {|v| opts[:make] = v}
     op.on('-p', '--[no-]prune', 'Remove any objects no longer in the source file(s)') {|v| opts[:prune] = v}
-    op.on('-d', '--[no-]drop', 'any objects no longer in the source file(s)') {|v| opts[:drop] = v}
+    op.on('-d', '--[no-]drop', 'Any objects no longer in the source file(s)') {|v| opts[:drop] = v}
+    op.on('-z', '--[no-]post', 'Run the post-parse cleanup scans (default behavior)') {|v| opts[:post] = v}
     op.on('-b', '--branch=object', 'Include the specified object and all others that depend on it') {|v| opts[:branch] += v + ' '}
 #    op.on('-w', '--work=dir', '') {|v| opts[:work] = v}
 #    op.on('-t', '--test', 'Show what would happen, but make no actual changes') {opts[:test] = true}
@@ -37,12 +39,19 @@ end.parse!
 #Fixme: turn back on when dump/restore implemented
 #FileUtils::mkdir_p opts[:work]			#Make sure working directory exists
 
-dbc = WysemanDB.new(dbname:opts[:dbname], host:opts[:host])	#Connect to postgres, will make sure bootstrap/ddict exists
-
+dbc = Wyseman::DB.new(dbname:opts[:dbname], host:opts[:host])	#Connect to postgres, will make sure bootstrap/ddict exists
+post_sql = ''
 if ARGV.length > 0
-  wm = Wyseman.new				#Initialize the parser
-  ARGV.each {|f| wm.parse(f)}			#Parse the specified input files
-  wm.check(opts[:prune])			#And do post-cleanup
+  wm = Wyseman::Session.new(dbc)		#Initialize the parser
+  ARGV.each {|f| 				#Parse the specified input files
+    exit if !(sql = wm.parse(f))
+    post_sql << sql				#accumulate for later
+  }
+  if opts[:post]				#And do post-cleanup
+    wm.check(opts[:prune])
+  else
+    exit 0					#No post-cleanup, so get out now
+  end
 end
 
 if opts[:branch] == ''				#If no branches specified
@@ -54,4 +63,10 @@ end
 #Instantiate specified, or default objects in the database, with optional pre-drop
 if opts[:make] 
   dbc.x("select case when wm.make(#{brval},#{opts[:drop]},true) > 0 then wm.init_dictionary() end;")		#Make objects/dictionary
+end
+
+if post_sql != ''
+  puts "Running nitialization SQL"
+#  puts "SQL:"+post_sql				#Debug
+  dbc.x(post_sql)
 end
