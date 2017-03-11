@@ -21,22 +21,27 @@ namespace eval wmdd {
 #------------------------------------------------------------
 proc wmdd::style {table {column {}}} {
     variable v
-    set idx "column:$table:$column"
+    set idx "style:$table:$column"
 #puts "style table:$table column:$column idx:$idx"
     lassign [wmdd::table_parts $table] sch tab
     if {![info exists v($idx)]} {
         set switches {}
-        if {$column == {}} {
-            set ql [sql::qlist "select sw_name, sw_value from wm.table_style where ts_sch = '$sch' and ts_tab = '$tab'"]
+        if {$column == {_}} {
+            set v($idx) [sql::qlist "select distinct cs_col from wm.column_style where cs_sch = '$sch' and cs_tab = '$tab' order by 1;"]
+            return $v($idx)
+        } elseif {$column == {}} {
+            set ql [sql::qlist "select sw_name, sw_value from wm.table_style where ts_sch = '$sch' and ts_tab = '$tab';"]
         } else {
-            set ql [sql::qlist "select sw_name, sw_value from wm.column_style where cs_sch = '$sch' and cs_tab = '$tab' and cs_col = '$column'"]
+            set ql [sql::qlist "select sw_name, sw_value from wm.column_style where cs_sch = '$sch' and cs_tab = '$tab' and cs_col = '$column';"]
         }
+        set v($idx) {}			;#Don't keep re-searching if nothing found
         foreach rec $ql {
             lassign $rec sw va
             lappend v($idx) "-$sw" "$va"
         }
-        if {![info exists v($idx)]} {error "Can't find data for table:$table, column:$column"; return {}}
+#        if {![info exists v($idx)]} {error "Can't find data for table:$table, column:$column"; return {}}
     }
+#puts " v($idx) = $v($idx)"
     return $v($idx)
 }
 
