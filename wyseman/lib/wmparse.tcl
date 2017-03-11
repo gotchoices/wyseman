@@ -1,29 +1,7 @@
 #Parse wyseman schema description files
 #---------------------------------------
-#include(Copyright)
+#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
 #TODO:
-#X- Make generic so I can call from ruby
-#X- Test calling wmparse::err
-#X- Eliminated field proc.  Now can't build audit tables.  How to get table schema?
-#X- Generalize grants to work for any site schema (levels 1..N)
-#X- Put default admin grants in schema files
-#X- Test/port standalone grant code
-#X- Can build ruby gem
-#X- Clean out unused, commented code
-#X- How best to handle overloaded functions, objects with same name of different types
-#X- Test replacing view/rules (old cnf(repl) replace switch)
-#X- After PG8.2, sequences have a usage priv (rather than only select,update)
-#X- Also many other privs in latest postgresql
-#X- Test tabtext (no handler yet)
-#- 
-#- What if I define text for a nonexistent table or column?
-#- Test tabdef, store defaults in database (no handler yet)
-#- 
-#- Re-create tcl parts in another file, make tcl version work again? (probably not)
-#-  Command line version runs only through ruby gem
-#-  Run-time libraries work in tcl and ruby
-#-  Can still build tcl wyseman run-time library
-#- Get wisegi working again to visualize schema files
 #- 
 #puts "proc hand_object {\n[info body hand_object]\n}"		;#Debug
 
@@ -31,6 +9,7 @@ namespace eval wmparse {
     variable v
     set v(fname)	{}
     set v(module)	{}
+    set v(paths)	{}	;#paths of any files we parse in this run
     set v(requires)	{}	;#list of required files already sourced
     set v(objs)		{table view sequence index function trigger rule schema other grant tabtext tabdef define field require module}
     set v(int) [interp create]
@@ -56,18 +35,27 @@ proc wmparse::module {args} {
 #------------------------------------------------------------
 proc wmparse::require {args} {
     variable v
-    set path [file dirname [file normalize $v(fname)]]	;#Path of file we're in
+    set paths [list [file dirname [file normalize $v(fname)]] {*}$v(paths)]	;#Paths to look in
+#puts 'Require:$args'
     foreach f $args {
-        set file [file join $path $f]			;#Make full pathname of file
-        if {[lcontain $v(requires) $file]} {		;#If already loaded
-            #Do nothing
-        } elseif {[file exists $file]} {		;#If I can find it
-#puts "source:$file"
-            interp eval $v(int) source $file		;#Interpret it
-            lappend v(requires) $file
-        } else {
-            error "Can't find required file: $file"
+        set found 0
+        foreach p $paths {				;#Look in all known paths
+            set file [file normalize [file join $p $f]]	;#Make full pathname of file
+#puts "file:$file"
+            if {[lcontain $v(requires) $file]} {	;#If already loaded
+#puts " found:$file"
+                set found 1
+                break					;#Skip this file
+            } elseif {[file exists $file]} {		;#If I can find it
+#puts " source:$file"
+                parse $file				;#parse recursively
+#                interp eval $v(int) source $file	;#Interpret it
+                lappend v(requires) $file
+                set found 1
+                break					;#Skip any other paths
+            }
         }
+        if {!$found} {error "\n  Can't find required file: $f in any of: \n   [join $paths "\n   "]"}
     }
 }
 
@@ -76,10 +64,13 @@ proc wmparse::require {args} {
 proc wmparse::parse {fname} {
     variable v
     set v(fname) $fname
+    set path [file dirname [file normalize $fname]]	;#Path of file we're in
+    if {![lcontain $v(paths) $path]} {lappend v(paths) $path}			;#Keep track of all folders we go into
+    
     if {$v(module) == {}} {set v(module) [file rootname [file tail $fname]]}	;#default module name to file name, if none other specified
     if {[catch {interp eval $v(int) source $fname} errmsg]} {
-        puts "Error ($fname): $::errorInfo"
-        error "Aborting Script"
+        puts "Error in $fname: $::errorCode\n$::errorInfo"
+        error "Aborting script: $fname"
     }
 }
 
@@ -198,7 +189,6 @@ proc wmparse::object {obj args} {
             lappend deps "${tt}:$oo"
         }
     }
-
     hand_object $name $obj $v(module) [join $deps { }] $create $drop
 
     set ob($name.create) $create			;#code to create object
@@ -522,13 +512,13 @@ proc wmparse::tabtext {table args} {
 #------------------------------------------------------------
 proc wmparse::tabdef {table args} {
     variable ob
-#puts "tabdef name:$name args:$args"
+#puts "tabdef table:$table args:$args"
 #    if {$args == {} && [info exists ob($name.defs)]} {return $ob($name.defs)}
 #    if {![lcontain $ob(names) $name]} {error "Can not define default view information for non-existent table: $name"; return}
 #    set ob($name.defs) $args
 
     argform {focus fields} args
-    argnorm {{focus 2} {fields 1}} args
+    argnorm {{focus 2} {fields 1} {inherits 1}} args
     lassign [table_parts $table] schema table
 
     set fargs [xswitchs fields args]		;#grab the field arguments
@@ -536,12 +526,7 @@ proc wmparse::tabdef {table args} {
     set    query "delete from wm.table_style where ts_sch = '$schema' and ts_tab = '$table';\n"
     append query "delete from wm.column_style where cs_sch = '$schema' and cs_tab = '$table';\n"
     
-    foreach {sw va} $args {
-        if {[string range $sw 0 0] != {-}} {error "Expected switch: $sw"}
-        append query "insert into wm.table_style (ts_sch,ts_tab,sw_name,sw_value) values ('$schema','$table','[string range $sw 1 end]','[regsub {'} $va {''}]');\n"
-    }
-
-    foreach fa $fargs {			;#for each column
+    foreach fa $fargs {				;#for each column
         set fa [lassign $fa tag]
         argform {style size sub} fa		;#add switch names to all args
 #        argnorm {{column 2} {title 2} {help 2} {subframe}} fa
@@ -551,5 +536,17 @@ proc wmparse::tabdef {table args} {
             append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) values ('$schema','$table','$tag','[string range $sw 1 end]','[regsub {'} $va {''}]');\n"
         }
     }
+    foreach {sw va} $args {
+        if {[string range $sw 0 0] != {-}} {error "Expected switch: $sw"}
+        if {$sw == {-inherits}} {
+            lassign [split $va {.}] sch tab
+            append query "insert into wm.table_style (ts_sch,ts_tab,sw_name,sw_value) select '$schema','$table',sw_name,sw_value from wm.table_style where ts_sch = '$sch' and ts_tab = '$tab' on conflict do nothing;\n"
+            append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) select '$schema','$table',cs_col,sw_name,sw_value from wm.column_style where cs_sch = '$sch' and cs_tab = '$tab' on conflict do nothing;\n"
+#puts "query:$query"
+        } else {
+            append query "insert into wm.table_style (ts_sch,ts_tab,sw_name,sw_value) values ('$schema','$table','[string range $sw 1 end]','[regsub {'} $va {''}]');\n"
+        }
+    }
+
     hand_query $table $query
 }
