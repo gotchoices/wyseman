@@ -1,0 +1,25 @@
+#Text descriptions for meta-data tables
+#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
+
+foreach x {table_text column_text value_text error_text column_pub} {
+  tabdef wm.$x -focus code -fields {
+    {language	-size  4}
+    {title	-size 40}
+    {help	-size 40 -spf edw}
+  }
+}
+
+tabdef wm.objects -focus obj_nam -fields {
+    {name	-size  40}
+    {checked	-size  4}
+    {clean	-size  4}
+    {mod_ver	-size  4}
+    {deps	-size  40 -spf edw}
+    {ndeps	-size  40 -spf edw}
+    {grants	-size  40 -spf edw}
+    {col_data	-size  40 -spf edw}
+    {crt_sql	-size  40 -spf edw}
+    {drp_sql	-size  40 -spf edw}
+    {min_rel	-size  4}
+    {max_rel	-size  4}
+}
