@@ -14,6 +14,7 @@ Gem::Specification.new do |s|
 	"Release",
 	"lib/wyseman.rb",
 	"lib/bootstrap.sql",
+	"lib/run_time.wmd",
 	"lib/run_time.wms",
 	"lib/run_time.wmt",
 	"lib/wmparse.tcl",
