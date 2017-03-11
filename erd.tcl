@@ -358,7 +358,7 @@ proc erd::init {w args} {
 
     set cfig(tags$w) {}
     lassign {1 1} x y
-    foreach rec [sql::qlist "select obj,tab_kind,title,help from wm.table_pub where tab_kind = 'r' and (language isnull or language = '$cfig(lang$w)') order by obj"] {
+    foreach rec [sql::qlist "select obj,tab_kind,title,help from wm.table_pub where tab_kind = 'r' and (language isnull or language = '$cfig(lang$w)') and sch not in ('wm','information_schema','pg_catalog') order by obj"] {
 #puts "T rec:$rec"
         lassign $rec tag tab_kind title help		;#query finds only tables with text descriptions
         add $w $tag $title $help $x $y

@@ -1,4 +1,5 @@
 -- Bootstrap the schema with table containing create/drop data about all other objects
+-- Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
 -- TODO:
 -- X- How to prune the dependencies for objects that can be replaced (functions/views)
 -- X- Make routine:
@@ -14,6 +15,7 @@
 -- X- Items must track which module,release they are a part of
 -- X- Find orphaned objects and delete them
 -- X- When deleting an item from objects, delete the actual object too
+-- - Bug: orphan check only works if at least one object still remains in the source file
 -- - 
 -- - Test: Can't change items part of a prior release
 -- - If table columns have changed, apply alter script before drop/create of table
@@ -306,7 +308,7 @@ raise notice 'Drop:% :%:', trec.depth, trec.object;
           end;
         end if;
         if trec.obj_typ = 'table' and cnt > 0 then		-- Attempt to preserve existing table data
-          collist = array_to_string(array(select column_nam::text from information_schema.columns where table_schema || '.' || table_nam = trec.obj_nam order by ordinal_position),',');
+          collist = array_to_string(array(select column_name::text from information_schema.columns where table_schema || '.' || table_name = trec.obj_nam order by ordinal_position),',');
 -- raise notice 'collist:%', collist;
           s = wrk || '/' || trec.obj_nam || '.dump';
           execute 'copy ' || trec.obj_nam || '(' || collist || ') to ''' || s || '''';

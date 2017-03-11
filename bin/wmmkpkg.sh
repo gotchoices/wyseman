@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #This is used instead of pkg_mkIndex in order to:
 # - define applib_library as the path to wherever this library is found
 # - cause init.tcl to be loaded upon require, but
