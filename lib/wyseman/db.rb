@@ -20,7 +20,7 @@ class DB < PG::Connection
       (args[-1] = (oldh = args[-1]).dup)[:dbname] = 'template1'
       db = PG::Connection.new(*args)			#Connect to template db
       oldh[:dbname] = db.exec("select current_user;").getvalue(0,0) if !oldh[:dbname]	#Get my PG username if no username specified explicitly
-      db.exec "create database " + q(oldh[:dbname])	#Create my database
+      db.exec "create database " + qid(oldh[:dbname])	#Create my database
       db.close
       args[-1] = oldh
       super(*args)					#And try reconnecting
@@ -38,28 +38,39 @@ class DB < PG::Connection
     
     @column_data = {}
   end
+
+# -----------------------------------------------------------------------------
   def x(query)						#Short-hand for exec
       exec(query)
   end
+
+# -----------------------------------------------------------------------------
   def t(query)						#Exec query as atomic transaction
       transaction { |c| c.exec(query)}
   end
+
+# -----------------------------------------------------------------------------
   def esc(str)						#Short-hand for escaping sql
       escape_string (str)
   end
+
+# -----------------------------------------------------------------------------
   def qid(str)						#Short-hand for quoting identifier
       quote_ident (str)
   end
+
+# -----------------------------------------------------------------------------
   def one(query)					#Get a single row as an array
-      exec(query).column_values(0)
+      exec(query).values[0]
   end
 
+# -----------------------------------------------------------------------------
   def quote(tab, col, val, errchk = false)		#Return a value with single quote, if 
     return val if col == 'oid'
-    tp = column_type(tab, col)
-#printf("  tp:%s\n", tp)
-    return 'null' if val == '' && no_null(tab, col)
-    if %w{numeric int float}.contain?(tp)
+    tp = (cdat = column(tab, col))['type']
+#printf("  cdat:%s\n", cdat)
+    return 'null' if val == '' && cdat['nonull'] == 't'
+    if %w{numeric int int4 int8 float float4 float8}.include?(tp)
       val.gsub!(/[$,]/,'')
       if val == ''
         raise "Illegal blank value for table:#{tab} column:#{col}" if errchk
@@ -69,80 +80,152 @@ class DB < PG::Connection
     elsif tp[0] == '_'
       return "'#{esc(val)}'"
     end
+    return "'" + (escape_string (val)) + "'"
   end
   
+# -----------------------------------------------------------------------------
   def table_split(table)				#Split schema, table into array
     return table.split('.') if table.include?('.')
     return ['public',table]
   end
 
+# -----------------------------------------------------------------------------
   def style(table, column=nil)		# Return table or column default styles
     #Port_me
   end
 
+# -----------------------------------------------------------------------------
   def view_oid (table)			# Return name of an oid column (typically _oid) for a view
     #Port_me
   end
 
+# -----------------------------------------------------------------------------
   def error_text (table, code)		# Return the text for a specified message
     #Port_me
   end
 
-  def table(table)			# Return table text and type
-    #Port_me
-  end
+# -----------------------------------------------------------------------------
+#  def table(table)			# Return table text and type
+#    #Port_me
+#xxxxxxx
+#    idx = tab + ':' + col
+##printf("column tab:%s col:%s idx:%s\n", tab, col, idx)
+#      if !@column_data[idx] then
+#        s, t = table_split(tab)
+#        self.x("select col,title,help,type,nonull from wm.column_pub where sch = '#{esc(s)}' and tab = '#{esc(t)}' and language = '#{@lang}';").each { |rec|
+#          ix = tab + ':' + rec['col']
+#          rec.delete('col')
+#          @column_data[ix] = rec
+##printf("  cd[%s]=%s\n", ix, rec)
+#        }
+#      end
+#    else			# Return table data
+#      #Port_me
+#    end
+#    raise "No meta-information found for table:#{tab} column:#{col}" if !@column_data[idx]
+#    return @column_data[idx]
+#  end
 
-  def no_null(table, column)		# Return boolean indicating if this field is not allowed to be null
-    #Port_me
-  end
-
-  def column(tab, col = nil)	# Return column text and type, or all columns
+# -----------------------------------------------------------------------------
+  def column(tab, col = nil)	# Return hash containing column text and type, or all columns
     if col
       idx = tab + ':' + col
 #printf("column tab:%s col:%s idx:%s\n", tab, col, idx)
       if !@column_data[idx] then
         s, t = table_split(tab)
-        self.x("select col,title,help,type from wm.column_pub where sch = '#{esc(s)}' and tab = '#{esc(t)}' and language = '#{@lang}';").each { |rec|
+        self.x("select col,title,help,type,nonull from wm.column_pub where sch = '#{esc(s)}' and tab = '#{esc(t)}' and language = '#{@lang}';").each { |rec|
           ix = tab + ':' + rec['col']
           rec.delete('col')
           @column_data[ix] = rec
 #printf("  cd[%s]=%s\n", ix, rec)
         }
       end
-    else
+    else			# Return table data
       #Port_me
     end
-    raise "No data found for table:#{tab} column:#{col}" if !@column_data[idx]
+    raise "No meta-information found for table:#{tab} column:#{col}" if !@column_data[idx]
     return @column_data[idx]
   end
 
-  def column_type(table, column)		# Return column type
-    return 'oid' if column == 'oid'
-#printf("column_type: %s\n", column(table,column).class)
-    typ = column(table,column)['type']
-    if %w{int2 int4 int8}.contain?(typ)
-      return 'int'
-    elsif %w{float4 float8}.contain?(typ)
-      return 'float'
-    end
-    return typ
-  end
+#Try to do without this, and just use column and regexp's
+# -----------------------------------------------------------------------------
+#  def column_type(tab, col)		# Return column type
+#    return 'oid' if col == 'oid'
+##printf("column_type: %s\n", column(tab,col).class)
+#    typ = column(tab,col)['type']
+#    if %w{int2 int4 int8}.include?(typ)
+#      return 'int'
+#    elsif %w{float4 float8}.include?(typ)
+#      return 'float'
+#    end
+#    return typ
+#  end
 
+# -----------------------------------------------------------------------------
   def column_values(table, column, value=nil)	# Return allowable values for a column if they exist
     #Port_me
   end
 
-  def pkey(table)			# Return the primary key field names for a table
-    #Port_me
+# -----------------------------------------------------------------------------
+  def pkey(tab)			# Return the primary key field names for a table
+#    idx = 'pkey:' + tab
+#printf("pkey tab:%s\n", tab)
+#    s, t = table_split(tab)
+#    if !@table_data[idx] then
+#        self.x("select col,title,help,type,nonull from wm.column_pub where sch = '#{esc(s)}' and tab = '#{esc(t)}' and language = '#{@lang}';").each { |rec|
+#          ix = tab + ':' + rec['col']
+#          rec.delete('col')
+#          @column_data[ix] = rec
+##printf("  cd[%s]=%s\n", ix, rec)
+#        }
+#      end
+#    else			# Return table data
+#      #Port_me
+#    end
+#    raise "No meta-information found for table:#{tab} column:#{col}" if !@column_data[idx]
+#    return @column_data[idx]
   end
 
+# -----------------------------------------------------------------------------
   def tables_ref(table, refme=false)	# Return tables that are referenced (pointed to) by the specified table
     #Port_me				# If refme true, return tables that reference the specified table
   end
 
+# -----------------------------------------------------------------------------
   def columns_fk(table, ftable)		# Return the fk columns in a table and the pk columns they point to in a foreign table
     #Port_me
   end
 
-end
+# -----------------------------------------------------------------------------
+  def insert(table, data)		#Return SQL to insert a record contained in a hash
+#printf("Insert table:%s data:%s\n", table, data)
+    fields, values = [], []
+    data.each_pair { |idx, val|
+        fields << self.qid(idx)
+        values << self.quote(table,idx,val)
+    }
+    "insert into #{table} (#{fields.join(',')}) values (#{values.join(',')});"
+  end
+
+# -----------------------------------------------------------------------------
+  def update(table, data, where)	#Return SQL to update records as specified in a hash
+#printf("Update table:%s data:%s where:%s\n", table, data, where)
+    setems = []
+    data.each_pair { |idx, val|
+        setems << self.qid(idx) + '=' + self.quote(table,idx,val)
+    }
+    raise 'Illegal where clause' if !where
+    w = (where != '') ? 'where ' + where : ''
+    "update #{table} set #{setems.join(',')} #{w};"
+  end
+
+# -----------------------------------------------------------------------------
+  def delete(table, where)	#Return SQL to delete records from a table
+#printf("Delete from table:%s where:%s\n", table, where)
+    raise 'Illegal where clause' if !where
+    w = (where != '') ? 'where ' + where : ''
+    "delete from #{table} #{w};"
+  end
+
+end	#class DB
 end	#module Wyseman
