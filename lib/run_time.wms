@@ -1,5 +1,8 @@
 #Schema to track meta-data about tables, columns, views, etc.
 #Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
+#TODO
+#- A pkey column, in a vew but by a different name, doesn't seem to show up in the view as a pkey, without an explicity -primary reference
+#- 
 module wyseman
 
 # Default display styles for tables
@@ -106,18 +109,20 @@ view wm.table_data {} {
 
 # Unified information about non-system tables
 #-------------------------------------------
-view wm.table_pub {wm.table_data wm.table_text} {
+view wm.table_pub {wm.table_data wm.table_text wm.column_data} {
     select
         td.td_sch				as sch
       , td.td_tab				as tab
       , td.tab_kind
       , td.has_pkey
       , td.columns
+      , kd.pkey
       , tt.language
       , tt.title
       , tt.help
       , td.td_sch || '.' || td.td_tab	as obj
     from		wm.table_data	td
+    left join		(select cdt_sch,cdt_tab,array_agg(cdt_col) as pkey from (select cdt_sch,cdt_tab,cdt_col from wm.column_data where pkey order by field) sq group by 1,2) kd on kd.cdt_sch = td.td_sch and kd.cdt_tab = td.td_tab
     left join		wm.table_text	tt on td.td_sch = tt.tt_sch and td.td_tab = tt.tt_tab;
 --        where		not td.td_sch in ('pg_catalog','information_schema');
 } -primary {sch tab} -grant public
@@ -138,29 +143,29 @@ function {wm.default_native()} {wm.column_native wm.column_data wm.view_column_u
         nrec	record;
         sname	varchar;
         tname	varchar;
-        cnt		int default 0;
+        cnt	int default 0;
     begin
         delete from wm.column_native;
-        for crec in select * from wm.column_data where cdt_col != '_oid' and field  >= 0 and cdt_sch not in ('pg_catalog','information_schema') loop
-            sname := crec.cdt_sch;
-            tname := crec.cdt_tab;
+        for crec in select * from wm.column_data where cdt_col != '_oid' and field  >= 0 and tab_kind = 'v' and cdt_sch not in ('pg_catalog','information_schema') loop
+-- raise notice ' Col:%', crec.cdt_col;
+            sname = crec.cdt_sch;
+            tname = crec.cdt_tab;
             loop
                 select into nrec * from wm.view_column_usage where view_schema = sname and view_name = tname and column_name = crec.cdt_col order by table_name desc limit 1;	-- order at least gives a predictable result if there are 2 or more...
                 if not found then exit; end if;
-                sname := nrec.table_schema;
-                tname := nrec.table_name;
+                sname = nrec.table_schema;
+                tname = nrec.table_name;
             end loop;
             insert into wm.column_native (cnt_sch, cnt_tab, cnt_col, nat_sch, nat_tab, nat_col, pkey) values (crec.cdt_sch, crec.cdt_tab, crec.cdt_col, sname, tname, crec.cdt_col, crec.is_pkey);
         end loop;
         return cnt;
     end;
-  $$;
-}
+$$;}
 
 # Initialize the data dictionary
 # Always execute this after any tables/views have been altered
 #-------------------------------------------
-function {wm.init_dictionary()} {wm.default_native()} {
+function {wm.init_dictionary()} {wm.default_native() wm.column_native wm.column_data} {
   returns boolean language plpgsql as $$
     declare
       trec	record;
@@ -208,12 +213,14 @@ view wm.column_data {wm.column_native} {
     , a.attname		as cdt_col
     , a.attnum		as field
     , t.typname		as type
-    , na.attnotnull		as nonull		-- notnull of native table
+    , na.attnotnull	as nonull		-- notnull of native table
+    , nd.adsrc		as def
     , case when a.attlen < 0 then null else a.attlen end 	as length
     , coalesce(na.attnum = any((select conkey from pg_constraint
           where connamespace = nc.relnamespace
           and conrelid = nc.oid and contype = 'p')::int4[]),'f') as is_pkey
     , ts.pkey		-- like ispkey, but can be overridden explicitly in the wms file
+    , c.relkind		as tab_kind
     , ts.nat_sch
     , ts.nat_tab
     , ts.nat_col
@@ -225,6 +232,7 @@ view wm.column_data {wm.column_native} {
       left join		pg_namespace	nn	on nn.nspname = ts.nat_sch
       left join		pg_class	nc	on nc.relnamespace = nn.oid and nc.relname = ts.nat_tab
       left join		pg_attribute	na	on na.attrelid = nc.oid and na.attname = a.attname
+      left join		pg_attrdef	nd	on nd.adrelid = na.attrelid and nd.adnum = na.attnum
   where c.relkind in ('r','v');		-- only include tables and views
 --        and a.attnum >= 0 			-- don't include system columns
 } -primary {cdt_sch cdt_tab cdt_col} -grant public
@@ -236,16 +244,17 @@ view wm.column_pub {wm.column_data wm.column_text} {
     cd.cdt_sch					as sch
   , cd.cdt_tab					as tab
   , cd.cdt_col					as col
-  , cd.cdt_sch || '.' || cd.cdt_tab			as obj
+  , cd.cdt_sch || '.' || cd.cdt_tab		as obj
   , cd.field
   , cd.type
   , cd.nonull
+  , cd.def
   , cd.length
   , cd.is_pkey
   , cd.pkey
   , cd.nat_sch
   , cd.nat_tab
-  , cd.nat_sch || '.' || cd.nat_tab			as nat
+  , cd.nat_sch || '.' || cd.nat_tab		as nat
   , cd.nat_col
   , coalesce(vt.language, nt.language, 'en')	as language
   , coalesce(vt.title, nt.title, cd.cdt_col)	as title
@@ -257,6 +266,18 @@ view wm.column_pub {wm.column_data wm.column_text} {
     where		cd.cdt_col != '_oid'
     and		cd.field >= 0;
 --        and		not cd.cdt_sch in ('pg_catalog','information_schema');
+} -primary {sch tab col} -grant public
+
+# For initializing a record to default values
+#-------------------------------------------
+view wm.column_def {wm.column_pub} {
+  select obj, col, 
+    case when def is not null then
+      'coalesce($1.' || quote_ident(col) || ',' || def || ') as ' || quote_ident(col)
+    else
+      '$1.' || col || ' as ' || quote_ident(col)
+    end as val
+  from wm.column_pub order by obj, field
 } -primary {sch tab col} -grant public
 
 # Generate an array of column names from their position numbers
@@ -283,12 +304,12 @@ function {wm.column_names(oid,int4[])} {} {
 #-------------------------------------------
 view wm.fkeys_data {wm.column_names(oid,int4[])} {
   select
-      co.conname					as conname
-    , tn.nspname					as kst_sch
-    , tc.relname					as kst_tab
+      co.conname				as conname
+    , tn.nspname				as kst_sch
+    , tc.relname				as kst_tab
     , wm.column_names(co.conrelid,co.conkey)	as kst_cols
-    , fn.nspname					as ksf_sch
-    , fc.relname					as ksf_tab
+    , fn.nspname				as ksf_sch
+    , fc.relname				as ksf_tab
     , wm.column_names(co.confrelid,co.confkey)	as ksf_cols
   from			pg_constraint	co 
     join		pg_class	tc on tc.oid = co.conrelid
@@ -305,18 +326,18 @@ view wm.fkeys_pub {wm.fkeys_data wm.column_native} {
     tk.conname
   , tn.cnt_sch				as tt_sch
   , tn.cnt_tab				as tt_tab
-  , tn.cnt_sch || '.' || tn.cnt_tab		as tt_obj
+  , tn.cnt_sch || '.' || tn.cnt_tab	as tt_obj
   , tk.kst_cols				as tt_cols
   , tn.nat_sch				as tn_sch
   , tn.nat_tab				as tn_tab
-  , tn.nat_sch || '.' || tn.nat_tab		as tn_obj
+  , tn.nat_sch || '.' || tn.nat_tab	as tn_obj
   , fn.cnt_sch				as ft_sch
   , fn.cnt_tab				as ft_tab
-  , fn.cnt_sch || '.' || fn.cnt_tab		as ft_obj
+  , fn.cnt_sch || '.' || fn.cnt_tab	as ft_obj
   , tk.ksf_cols				as ft_cols
   , fn.nat_sch				as fn_sch
   , fn.nat_tab				as fn_tab
-  , fn.nat_sch || '.' || fn.nat_tab		as fn_obj
+  , fn.nat_sch || '.' || fn.nat_tab	as fn_obj
   from	wm.fkeys_data		tk
     join		wm.column_native	tn on tn.nat_sch = tk.kst_sch and tn.nat_tab = tk.kst_tab and tn.nat_col = tk.kst_cols[1]
     join		wm.column_native	fn on fn.nat_sch = tk.ksf_sch and fn.nat_tab = tk.ksf_tab and fn.nat_col = tk.ksf_cols[1]
@@ -327,16 +348,16 @@ view wm.fkeys_pub {wm.fkeys_data wm.column_native} {
 #-------------------------------------------
 view wm.fkey_data {} {
   select
-      co.conname				as conname
-    , tn.nspname				as kyt_sch
-    , tc.relname				as kyt_tab
-    , ta.attname				as kyt_col
+      co.conname			as conname
+    , tn.nspname			as kyt_sch
+    , tc.relname			as kyt_tab
+    , ta.attname			as kyt_col
     , co.conkey[s.a]			as kyt_field
-    , fn.nspname				as kyf_sch
-    , fc.relname				as kyf_tab
-    , fa.attname				as kyf_col
+    , fn.nspname			as kyf_sch
+    , fc.relname			as kyf_tab
+    , fa.attname			as kyf_col
     , co.confkey[s.a]			as kyf_field
-    , s.a					as key
+    , s.a				as key
     , array_upper(co.conkey,1)		as keys
   from			pg_constraint	co 
     join		generate_series(1,10) s(a)	on true
@@ -356,19 +377,19 @@ view wm.fkey_pub {wm.fkey_data wm.column_native} {
     kd.conname
   , tn.cnt_sch				as tt_sch
   , tn.cnt_tab				as tt_tab
-  , tn.cnt_sch || '.' || tn.cnt_tab		as tt_obj
+  , tn.cnt_sch || '.' || tn.cnt_tab	as tt_obj
   , tn.cnt_col				as tt_col
   , tn.nat_sch				as tn_sch
   , tn.nat_tab				as tn_tab
-  , tn.nat_sch || '.' || tn.nat_tab		as tn_obj
+  , tn.nat_sch || '.' || tn.nat_tab	as tn_obj
   , tn.nat_col				as tn_col
   , fn.cnt_sch				as ft_sch
   , fn.cnt_tab				as ft_tab
-  , fn.cnt_sch || '.' || fn.cnt_tab		as ft_obj
+  , fn.cnt_sch || '.' || fn.cnt_tab	as ft_obj
   , fn.cnt_col				as ft_col
   , fn.nat_sch				as fn_sch
   , fn.nat_tab				as fn_tab
-  , fn.nat_sch || '.' || fn.nat_tab		as fn_obj
+  , fn.nat_sch || '.' || fn.nat_tab	as fn_obj
   , fn.nat_col				as fn_col
   , kd.key
   , kd.keys
@@ -381,7 +402,7 @@ view wm.fkey_pub {wm.fkey_data wm.column_native} {
   , coalesce(vt.title, nt.title, tn.cnt_col)	as title
   , coalesce(vt.help, nt.help)			as help
 
-  from	wm.fkey_data		kd
+  from	wm.fkey_data	kd
     join		wm.column_native	tn on tn.nat_sch = kd.kyt_sch and tn.nat_tab = kd.kyt_tab and tn.nat_col = kd.kyt_col
     join		wm.column_native	fn on fn.nat_sch = kd.kyf_sch and fn.nat_tab = kd.kyf_tab and fn.nat_col = kd.kyf_col
     left join		wm.column_text vt	on vt.ct_sch = tn.cnt_sch and vt.ct_tab = tn.cnt_tab and vt.ct_col = tn.cnt_col
@@ -398,12 +419,12 @@ view wm.role_members {} {
     join        	pg_authid       me on me.oid = am.member;
 } -primary {role member}
 
-# Show view columns that have ambiguous native tables
+# Show view columns that have ambiguous native tables (should ideally not be any)
 #-------------------------------------------
 view wm.column_ambig {wm.view_column_usage wm.column_native} {select
-    cu.view_schema		as sch
-  , cu.view_name		as tab
-  , cu.column_name		as col
+    cu.view_schema	as sch
+  , cu.view_name	as tab
+  , cu.column_name	as col
   , cn.nat_exp		as spec
   , count(*)		as count
   , array_agg(cu.table_name::varchar order by cu.table_name desc)	as natives

@@ -148,6 +148,7 @@ create or replace function wm.check_drafts(orph boolean default false) returns b
           from	wm.objects	o
           join	(select distinct module, source from wm.objects where obj_ver = 0) as od on od.module = o.module and od.source = o.source
           where 	wm.release() between o.min_rel and o.max_rel
+          and	o.source != ''
           and	not exists (select obj_nam from wm.objects where obj_typ = o.obj_typ and obj_nam = o.obj_nam and obj_ver = 0)
           loop
 raise notice 'Orphan: %:%', drec.obj_typ, drec.obj_nam;
@@ -197,14 +198,14 @@ create or replace function wm.check_deps() returns boolean language plpgsql as $
     darr	varchar[];	-- Accumulates cleaned up array
   begin
     for orec in select * from wm.objects_v where not checked loop
--- raise notice 'Checking object:% deps:%', orec.object, orec.deps;
+-- raise notice 'Checking object:% rel:% deps:%', orec.object, orec.release, orec.deps;
       darr = '{}';
       foreach d in array orec.deps loop
--- raise notice '            dep:%', d;
+-- raise notice '            dep:%:', d;
           select * into trec from wm.objects_v where object = d and release = orec.release;	-- Is this a full object name?
           if not FOUND then
             begin
-              select * into strict trec from wm.objects_v where obj_nam = d and release = orec.release;	-- Is it just the name, with no type
+              select * into strict trec from wm.objects_v where obj_nam = d and release = orec.release;	-- Do we only have the name, with no type?
               EXCEPTION
                 when NO_DATA_FOUND then
                   raise exception 'Dependency:%, by object:%, not found', d, orec.object;
@@ -218,21 +219,6 @@ create or replace function wm.check_deps() returns boolean language plpgsql as $
       end loop;
       update wm.objects set ndeps = darr, checked = true where obj_typ = orec.obj_typ and obj_nam = orec.obj_nam and obj_ver = orec.obj_ver;		-- Write out cleaned up array
     end loop;
-    return true;
-  end;
-$$;
-
--- Check data integrity; Execute after each parsing run
--- ----------------------------------------------------------------------------
-create or replace function wm.check_all(prune boolean default true, make boolean default true) returns boolean language plpgsql as $$
-  begin
-    if wm.check_drafts(prune) then
-      perform wm.check_deps();
-    end if;
-    delete from wm.objects where obj_ver = 0;
-    if make and wm.make(null,false,true) > 0 then
-      perform wm.init_dictionary();
-    end if;
     return true;
   end;
 $$;

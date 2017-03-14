@@ -139,12 +139,12 @@ proc wmparse::macsub {code} {
             lassign $bpa before parms after
             if {$cmd == {eval}} {set c {}} else {set c $cmd}
 #puts "B:$before: P:$parms: A:$after:"
-            if {[catch {
+#            if {[catch {
                 set code "$before[macsub [interp eval $v(int) $c $parms]][macsub $after]"
-            } err]} {
-                error "Parsing $cmd macro: $parms\n  ($err)"
-                return {}
-            }
+#            } err]} {
+#                error "Parsing $cmd macro: $parms\n  ($err)"
+#                return {}
+#            }
         }
     }
     return $code
