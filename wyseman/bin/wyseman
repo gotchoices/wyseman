@@ -62,11 +62,13 @@ end
 
 #Instantiate specified, or default objects in the database, with optional pre-drop
 if opts[:make] 
-  dbc.x("select case when wm.make(#{brval},#{opts[:drop]},true) > 0 then wm.init_dictionary() end;")		#Make objects/dictionary
+  if dbc.one("select wm.make(#{brval},#{opts[:drop]},true);")[0].to_i > 0	#Make objects
+    dbc.x("select wm.init_dictionary();")				#dictionary
+  end
 end
 
 if post_sql != ''
-  puts "Running nitialization SQL"
+  puts "Running Initialization SQL"
 #  puts "SQL:"+post_sql				#Debug
   dbc.x(post_sql)
 end
