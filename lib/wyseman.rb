@@ -49,9 +49,10 @@ class Session
       end
     }
     
-    if !@db.one("select obj_nam from wm.objects where obj_typ = 'table' and obj_nam = 'wm.table_text'")[0]	#If run_time schema not loaded yet
+    if !@db.one("select obj_nam from wm.objects where obj_typ = 'table' and obj_nam = 'wm.table_text'")	#If run_time schema not loaded yet
       parse File.join(File.dirname(__FILE__), 'run_time.wms')		#Parse it
-      @db.x("select wm.check_all(), wm.make(null, false, true);")	#And build it
+      @db.t("select case when wm.check_drafts(true) then wm.check_deps() end;")	#Check versions/dependencies
+      @db.t("select wm.make(null, false, true);")				#And build it
       parse File.join(File.dirname(__FILE__), 'run_time.wmt')		#Read text descriptions
       parse File.join(File.dirname(__FILE__), 'run_time.wmd')		#Read display switches
     end
@@ -66,7 +67,7 @@ class Session
           name, obj, mod, deps, create, drop = args
           create = @tclip._get_global_var(create)
           drop = @tclip._get_global_var(drop)
-#printf("OBJ name:%s obj:%s mod:%s deps:%s\n  Create:%s\n  Drop:%s\n", name, obj, mod, deps, create, drop)
+#printf("OBJ name:%s obj:%s mod:%s deps:%s file:%s\n  Create:%s\n  Drop:%s\n", name, obj, mod, deps, @fname, create, drop)
           if deps == ''
             deparr = '{}'
           else
@@ -110,6 +111,7 @@ class Session
   end
   
   def parse (fname)				#Parse a wyseman file
+    @fname = File.basename(fname)
     if File.extname(fname) == '.wmi'
       return `PATH=".:$PATH" #{fname}`		#Execute specified init file, capture sql
     end
