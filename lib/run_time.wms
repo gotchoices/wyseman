@@ -95,34 +95,35 @@ index {} wm.column_native {nat_sch nat_tab}
 
 # Backend information about tables (includes system tables)
 #-------------------------------------------
-view wm.table_data {} {
+view wm.table_data {wm.column_data} {
     select
         ns.nspname		as td_sch
       , cl.relname		as td_tab
       , cl.relkind		as tab_kind
-      , cl.relhaspkey	as has_pkey
+      , cl.relhaspkey		as has_pkey
       , cl.relnatts		as columns
+      , kd.pkey
     from		pg_class	cl
     join		pg_namespace	ns	on cl.relnamespace = ns.oid
+    left join		(select cdt_sch,cdt_tab,array_agg(cdt_col) as pkey from (select cdt_sch,cdt_tab,cdt_col from wm.column_data where pkey order by field) sq group by 1,2) kd on kd.cdt_sch = ns.nspname and kd.cdt_tab = cl.relname
     where		cl.relkind in ('r','v');	--only show tables and views
 } -primary {td_sch td_tab} -grant public
 
 # Unified information about non-system tables
 #-------------------------------------------
-view wm.table_pub {wm.table_data wm.table_text wm.column_data} {
+view wm.table_pub {wm.table_data wm.table_text} {
     select
         td.td_sch				as sch
       , td.td_tab				as tab
       , td.tab_kind
       , td.has_pkey
+      , td.pkey
       , td.columns
-      , kd.pkey
       , tt.language
       , tt.title
       , tt.help
       , td.td_sch || '.' || td.td_tab	as obj
     from		wm.table_data	td
-    left join		(select cdt_sch,cdt_tab,array_agg(cdt_col) as pkey from (select cdt_sch,cdt_tab,cdt_col from wm.column_data where pkey order by field) sq group by 1,2) kd on kd.cdt_sch = td.td_sch and kd.cdt_tab = td.td_tab
     left join		wm.table_text	tt on td.td_sch = tt.tt_sch and td.td_tab = tt.tt_tab;
 --        where		not td.td_sch in ('pg_catalog','information_schema');
 } -primary {sch tab} -grant public
@@ -146,7 +147,7 @@ function {wm.default_native()} {wm.column_native wm.column_data wm.view_column_u
         cnt	int default 0;
     begin
         delete from wm.column_native;
-        for crec in select * from wm.column_data where cdt_col != '_oid' and field  >= 0 and tab_kind = 'v' and cdt_sch not in ('pg_catalog','information_schema') loop
+        for crec in select * from wm.column_data where cdt_col != '_oid' and field  >= 0 and cdt_sch not in ('pg_catalog','information_schema') loop
 -- raise notice ' Col:%', crec.cdt_col;
             sname = crec.cdt_sch;
             tname = crec.cdt_tab;
@@ -179,7 +180,7 @@ function {wm.init_dictionary()} {wm.default_native() wm.column_native wm.column_
         foreach s in array trec.col_data loop		-- Overlay user specified natives
           tarr = string_to_array(s,',');
           if tarr[1] != 'nat' then continue; end if;	-- tarr = nat, column, nat_table, nat_column
-raise notice 'Cnat: %:%: %', trec.obj_typ, trec.obj_nam, s;
+--raise notice 'Cnat: %:%: %', trec.obj_typ, trec.obj_nam, s;
           oarr = string_to_array(trec.obj_nam,'.');	-- break object into schema, name
           narr = string_to_array(tarr[3],'.');		-- break native object into schema, name
           update wm.column_native set nat_sch = 'narr[1]', nat_tab = 'narr[2]', nat_col = 'tarr[4]', nat_exp = 't' where cnt_sch = 'oarr[1]' and cnt_tab = 'oarr[2]' and cnt_col = 'tarr[2]';
@@ -194,7 +195,7 @@ raise notice 'Cnat: %:%: %', trec.obj_typ, trec.obj_nam, s;
         tarr = string_to_array(trec.col_data[1],',');	-- PK must be in first element
         if tarr[1] = 'pri' then			
           tarr = tarr[2:array_upper(tarr,1)];
-raise notice 'Pkey: %:%: %', trec.obj_typ, trec.obj_nam, tarr;
+--raise notice 'Pkey: %:%: %', trec.obj_typ, trec.obj_nam, tarr;
           oarr = string_to_array(trec.obj_nam,'.');	-- break object into schema, name
           update wm.column_native set pkey = (cnt_col = any(tarr)) where cnt_sch = oarr[1] and cnt_tab = oarr[2];
         end if;
