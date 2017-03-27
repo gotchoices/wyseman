@@ -5,12 +5,12 @@ Postgres:  See README.pg
   create a user with the name of the user that will run the MyCHIPs server
   (mychips).
 
-ruby-pg or rubygem-pg
-  gem install ruby-pg; or
+Ruby postgresql plugin
+  gem install ruby-pg		;or
   dnf install rubygem-pg
   
 ruby-tcltk
-  gem install tcltklib ;or
+  gem install tcltklib		;or
   dnf install ruby-tcltk
 
 -----------------------------------------------------------------------
