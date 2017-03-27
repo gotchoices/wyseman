@@ -1,8 +1,10 @@
 -------------------------------------------------------------------------------
 Current setup procedure for postgres out of the box on Fedora
 
+- dnf install postgresql postgresql-server rubygem-pg
+
 - As postgres user:
-	initdb		(or as root: su -l postgres initdb)
+	initdb		(or as root: su -l postgres -c initdb)
 
 - If postgres is on a separate server, edit pg_hba.conf as needed
 - If connecting by various usernames, edit pg_ident.conf as needed
