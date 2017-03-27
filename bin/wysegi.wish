@@ -132,6 +132,7 @@ proc main_win {w} {
     set m [$w menu w]
     $m mb tools -under 0 -help {Common helpful functions for this application}
     $m tools mi ents {Entity View/Edit} -under 0 -s {Entities} -help {Open a top level window to show all entities in the system} -command "top::top base -title {Entities:} -build {base::build %w} -reopen 1"
+    $m tools mi parm {Parameter View/Edit} -under 0 -s {Parameters} -help {Open a top level window to show/edit system parameters} -command "top::top base -title {Parameters:} -build {base::build_parm %w} -reopen 1"
     $m tools mi erd  {Entity Relation Diagram} -s {ERD} -help {Launch a graph of the way the various tables relate to each other (an ERD)} -command "top::top erd -title {Entity Relations:} -build {build_erd %w} -reopen 1"
 
     top::add [eval dbp::dbp $w.p -exec exec_table $cnf(tablp)] tablp
