@@ -1,15 +1,26 @@
 Dependencies:
+
+Postgres:  See README.pg
+  Must have running postgresql server.  Run initdb as postgres user and
+  create a user with the name of the user that will run the MyCHIPs server
+  (mychips).
+
 ruby-pg or rubygem-pg
+  gem install ruby-pg; or
+  dnf install rubygem-pg
+  
 ruby-tcltk
+  gem install tcltklib ;or
+  dnf install ruby-tcltk
 
-
+-----------------------------------------------------------------------
 Wyseman includes an executable that can be run in a variety of modes
 to help you build and maintain a PostgreSQL database schema.
 
-For running the executable, you need to make sure it is installed somewhere
-in your PATH.  The Makefile will install in /usr/local/bin by default.
-You can set the environment variable WYBIN to something else and the
-Makefile should pick that up.
+For running the executable, you need to make sure it is installed 
+somewhere in your PATH.  The Makefile will install in /usr/local/bin by 
+default.  You can set the environment variable WYBIN to something else 
+and the Makefile should pick that up.
 
 -----------------------------------------------------------------------
 Additionally, wyseman includes a run-time loadable Tcl library that can be
