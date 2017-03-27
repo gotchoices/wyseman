@@ -72,7 +72,7 @@ class DB < PG::Connection
 #printf("  cdat:%s\n", cdat)
     return 'null' if val == '' && cdat['nonull'] == 't'
     if %w{numeric int int4 int8 float float4 float8}.include?(tp)
-      val.gsub!(/[$,]/,'')
+      val = val.gsub(/[$,]/,'')
       if val == ''
         raise "Illegal blank value for table:#{tab} column:#{col}" if errchk
         return 'null'
@@ -143,31 +143,39 @@ class DB < PG::Connection
   end
 
 # -----------------------------------------------------------------------------
-  def column_values(table, column, value=nil)	# Return allowable values for a column if they exist
+  def column_values(tab, col, value=nil)	# Return allowable values for a column if they exist
     #Port_me
   end
 
 # -----------------------------------------------------------------------------
-  def tables_ref(table, refme=false)	# Return tables that are referenced (pointed to) by the specified table
+  def tables_ref(tab, refme=false)	# Return tables that are referenced (pointed to) by the specified table
     #Port_me				# If refme true, return tables that reference the specified table
   end
 
 # -----------------------------------------------------------------------------
-  def columns_fk(table, ftable)		# Return the fk columns in a table and the pk columns they point to in a foreign table
+  def columns_fk(tab, ftab)		# Return the fk columns in a table and the pk columns they point to in a foreign table
     #Port_me
+  end
+
+# -----------------------------------------------------------------------------
+  def comp_list(fdata, tab, func='=')	#Generate a list of fields = val
+    conds = []
+    fdata.each_pair { |idx, val|
+      conds << self.qid(idx) + " #{func} " + self.quote(tab,idx,val)
+    }
+    conds
   end
 
 # -----------------------------------------------------------------------------
   def doSelect(fields, tab, where)	#Run a select from given parameters
     if where.is_a?(Hash)
-      conds = []
-      where.each_pair { |idx, val|
-        conds << self.qid(idx) + ' = ' + self.quote(tab,idx,val)
-      }
-      where = conds.join(' and ')
+      where = comp_list(where,tab).join(' and ')
+    elsif where.is_a?(Array)
+      where = where.join(' and ')
     end
-    query = "select #{fields} from #{tab} where #{where};"
-printf("Select table:%s query:%s\n", tab, query)
+    where = "where " + where if where != ''
+    query = "select #{fields} from #{tab} #{where};"
+#printf("Select query:%s\n", query)
     self.x query
   end
 
@@ -181,29 +189,41 @@ printf("Select table:%s query:%s\n", tab, query)
     }
     sql = "insert into #{tab} (#{fields.join(',')}) values (#{values.join(',')}) returning *;"
 puts 'Test_me:' + sql
-   self.x sql
+   res = self.x(sql)
+   raise 'Error inserting #{sql}' if res.ntuples != 1
+   res[0]
   end
 
 # -----------------------------------------------------------------------------
-  def doUpdate(table, data, where)	#Update records as specified in a hash
-printf("Update table:%s data:%s where:%s\n", table, data, where)
-    setems = []
-    data.each_pair { |idx, val|
-        setems << self.qid(idx) + '=' + self.quote(table,idx,val)
-    }
+  def doUpdate(tab, data, where)	#Update records as specified in a hash
+printf("Update table:%s data:%s where:%s\n", tab, data, where)
+    setems = comp_list(data, tab)
+    return nil if setems.length <= 0
+    if where.is_a?(Hash)
+      where = comp_list(where,tab).join(' and ')
+    elsif where.is_a?(Array)
+      where = where.join(' and ')
+    end
     raise 'Illegal where clause' if !where
-    w = (where != '') ? 'where ' + where : ''
-puts 'Test_me'
-#    self.x "update #{table} set #{setems.join(',')} #{w};"
+    where = "where " + where if where != ''
+    sql = "update #{tab} set #{setems.join(',')} #{where};"
+puts 'Test_me:' + sql
+    self.x sql
   end
 
 # -----------------------------------------------------------------------------
-  def doDelete(table, where)	#Delete records from a table
-printf("Delete from table:%s where:%s\n", table, where)
-    raise 'Illegal where clause' if !where
-    w = (where != '') ? 'where ' + where : ''
-puts 'Test_me'
-#    self.x "delete from #{table} #{w};"
+  def doDelete(tab, where)	#Delete records from a table
+printf("Delete from table:%s where:%s\n", tab, where)
+    if where.is_a?(Hash)
+      conds = comp_list(where,tab).join(' and ')
+    elsif where.is_a?(Array)
+      where = where.join(' and ')
+    end
+    raise 'Illegal where clause' if !where or where == ''
+    where = "where " + where
+    sql = "delete from #{tab} #{where};"
+puts 'Test_me:' + sql
+#    self.x sql
   end
 
 end	#class DB
