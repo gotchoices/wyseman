@@ -167,14 +167,18 @@ class DB < PG::Connection
   end
 
 # -----------------------------------------------------------------------------
-  def doSelect(fields, tab, where)	#Run a select from given parameters
+  def doSelect(fields, tab=nil, where=nil)	#Run a select from given parameters
+#printf("Select fields:%s tab:%s where:%s\n", fields, tab, where)
+    frtab = tab ? " from " + tab : ''
     if where.is_a?(Hash)
       where = comp_list(where,tab).join(' and ')
     elsif where.is_a?(Array)
       where = where.join(' and ')
+    elsif !where
+      where = ''
     end
-    where = "where " + where if where != ''
-    query = "select #{fields} from #{tab} #{where};"
+    where = " where " + where if where != ''
+    query = 'select ' + fields + frtab + where + ';'
 #printf("Select query:%s\n", query)
     self.x query
   end
