@@ -340,7 +340,8 @@ proc wmparse::function {args} {
     set plist {}
     foreach parm [split $parms ,] {
         if {![regexp -nocase {^out$} [lindex $parm 0]]} {	;#ignore output variables
-            lappend plist [string trim [lindex $parm end]]	;#and use the last token (which should be the type)
+            if {[llength $parm] > 1} {set tp [lindex $parm 1]} else {set tp $parm}	;#only or second token should be the type
+            lappend plist [string trim $tp]
         }
     }
     set name "${func}([join $plist ,])"
