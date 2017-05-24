@@ -1,4 +1,4 @@
-#Ruby interface to Schema Manager functions
+#Wyseman session; wrapper around TCL core parser
 #Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
 #TODO:
 #X- Warn if same object defined twice in same run

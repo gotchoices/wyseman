@@ -1,0 +1,294 @@
+//Manage one or more connections to a wyseman PostgreSQL database
+//If the specified database doesn't exist, create it.
+//If the bootstrap schema doesn't exist, create that too.
+//Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
+// -----------------------------------------------------------------------------
+//TODO:
+//- Port ruby code to js
+//- Support more than just english
+//- Create and connect to database just-in-time
+//- 
+
+const	_	= require('lodash')
+const	dlog	= require('util').debuglog('wyseman')
+var	pg	= require('pg').native;			//PostgreSQL
+var	dbBuilt	= false;				//Assume the database not yet created
+
+module.exports = class Wyseman {
+  constructor(conf) {
+    dlog("In constructor conf=%s", JSON.stringify(conf))
+    this.config = conf;					//Save configuration until we actually init
+    this.language = conf.lang || 'en';			//Default to english
+    this.client = new pg.Client(this.config);		//Client connection to db
+    dlog("Client:%s", JSON.stringify(this.client));
+  }
+
+// Execute a user query, invoking a callback with the results
+// -------------------------------------------------------------------
+  _query(sql,cb) {
+    this.client.query(sql, (err, res) => {	//Run the user's query
+      if (err) throw err;			//Report any errors
+      cb(res);					//Or run the user's callback
+    });
+  }
+
+// Make sure there is a connection to a valid database, before executing the user's query
+// -------------------------------------------------------------------
+  query(sql, cb) {
+    dlog("In query, connected:%s", this.client._connected);
+    if (this.client._connected) return this._query(sql,cb);	//If connected, just execute the query
+
+    this.client.connect(err => {				//Otherwise, try to connect
+      if (!err) return this._query(sql,cb);			//If that worked, just execute the query
+dlog("Connect error: %s", err.message);
+      if (!/does not exist/.test(err.message)) throw err;	//Report anything other than DB does not exist error
+      
+      let tclient = new pg.Client(_.assignIn({}, this.config, {database: 'template1'}))
+      tclient.connect(err => {					//Try connecting to template db
+        if (err) throw err;
+        let dbname = this.client.connectionParameters.database;
+dlog("DB name: %s", dbname);
+        tclient.query("create database " + dbname)		//And create our database
+          .then(res => {
+dlog("Initialize DB here; dirname:%s filename:%s", __dirname, __filename)
+//            var username = res.rows[0].current_user;
+dlog("User name: %s", username);
+          
+        }).then(() => tclient.end()).catch(err => dlog("Error creating database %s: %s", dbname, err))
+      });
+    });
+    dlog("Returning");
+  }
+
+//    this.connect(err => {				//If we failed to connect
+//console.log(" WM Got error: " + err + " Conf db:" + conf.database)
+//      var newconf = _.assignIn({}, conf, {database: 'template1'})
+//      var tclient = new pg.Client(newconf)
+//      tclient.connect();
+//      if (!conf.database) {
+//        tclient.query("select current_user;", (err,res) => {conf.database = res.rows[0]['current_user']})
+//      }
+//console.log(" Creating db:" + conf.database)
+//      tclient.query("create database " + conf.database);
+//      tclient.end();
+//    })
+//    this.connect();
+
+
+//
+//    rescue PG::ConnectionBad				#If can't connect
+//      (args[-1] = (oldh = args[-1]).dup)[:dbname] = 'template1'
+//      db = PG::Connection.new(*args)			#Connect to template db
+//      oldh[:dbname] = db.exec("select current_user;").getvalue(0,0) if !oldh[:dbname]	#Get my PG username if no username specified explicitly
+//      db.exec "create database " + qid(oldh[:dbname])	#Create my database
+//      db.close
+//      args[-1] = oldh
+//      super(*args)					#And try reconnecting
+//    end
+//
+//    set_notice_receiver { |res|
+//      puts res.error_message().split("\n")[0];		#Strip out any CONTEXT: lines
+//    }
+      
+//    begin
+//      one("select count(*) from wm.objects;")		#If bootstrap schema doesn't exist
+//    rescue PG::UndefinedTable				#create it
+//      t(File.open(File.join(File.dirname(__FILE__), '..' , 'bootstrap.sql'),'r').read)
+//    end
+    
+//    @column_data = {}
+//    @table_data = {}
+//  }	// constructor
+
+// -----------------------------------------------------------------------------
+  x (query) {						//Short-hand for exec
+    dlog("Query: %s", query)
+  
+//      exec(query)
+  }
+
+//# -----------------------------------------------------------------------------
+//  def t(query)						#Exec query as atomic transaction
+//      transaction { |c| c.exec(query)}
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def esc(str)						#Short-hand for escaping sql
+//      escape_string (str)
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def qid(str)						#Short-hand for quoting identifier
+//      quote_ident (str)
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def one(query)					#Get a single row as an array
+//      exec(query).values[0]
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def quote(tab, col, val, errchk = false)		#Return a value with single quote, if 
+//    return val if col == 'oid'
+//    tp = (cdat = column(tab, col))['type']
+//#printf("  cdat:%s\n", cdat)
+//    return 'null' if val == '' && cdat['nonull'] == 't'
+//    if %w{numeric int int4 int8 float float4 float8}.include?(tp)
+//      val = val.gsub(/[$,]/,'')
+//      if val == ''
+//        raise "Illegal blank value for table:#{tab} column:#{col}" if errchk
+//        return 'null'
+//      end
+//      return val
+//    elsif tp[0] == '_'
+//      return "'#{esc(val)}'"
+//    end
+//    return "'" + (escape_string (val)) + "'"
+//  end
+  
+//# -----------------------------------------------------------------------------
+//  def table_split(tab)				#Split schema, table into array
+//    return tab.split('.') if tab.include?('.')
+//    return ['public',tab]
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def style(tab, col=nil)		# Return table or column default styles
+//    #Port_me
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def view_oid (tab)			# Return name of an oid column (typically _oid) for a view
+//    #Port_me
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def error_text (tab, code)		# Return the text for a specified message
+//    #Port_me
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def table(tab)			# Return table text and type
+//    idx = tab
+//#printf("table tab:%s\n", tab)
+//    if !@table_data[idx]
+//      s, t = table_split(tab)
+//      res = self.x("select tab_kind,has_pkey,columns,pkey from wm.table_data where td_sch = '#{esc(s)}' and td_tab = '#{esc(t)}';")
+//      if res.ntuples >= 1
+//        @table_data[idx] = res[0]
+//      end
+//    end
+//    raise "No meta-information found for table:#{tab} column:#{col}" if !@table_data[idx]
+//#p @table_data[idx]
+//    return @table_data[idx]
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def column(tab, col = nil)	# Return hash containing column text and type, or all columns
+//    if col
+//      idx = tab + ':' + col
+//#printf("column tab:%s col:%s idx:%s\n", tab, col, idx)
+//      if !@column_data[idx] then
+//        s, t = table_split(tab)
+//        self.x("select col,title,help,type,nonull from wm.column_pub where sch = '#{esc(s)}' and tab = '#{esc(t)}' and language = '#{@lang}';").each { |rec|
+//          ix = tab + ':' + rec['col']
+//          rec.delete('col')
+//          @column_data[ix] = rec
+//#printf("  cd[%s]=%s\n", ix, rec)
+//        }
+//      end
+//    else			# Return table data
+//      #Port_me
+//    end
+//    raise "No meta-information found for table:#{tab} column:#{col}" if !@column_data[idx]
+//    return @column_data[idx]
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def column_values(tab, col, value=nil)	# Return allowable values for a column if they exist
+//    #Port_me
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def tables_ref(tab, refme=false)	# Return tables that are referenced (pointed to) by the specified table
+//    #Port_me				# If refme true, return tables that reference the specified table
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def columns_fk(tab, ftab)		# Return the fk columns in a table and the pk columns they point to in a foreign table
+//    #Port_me
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def comp_list(fdata, tab, func='=')	#Generate a list of fields = val
+//    conds = []
+//    fdata.each_pair { |idx, val|
+//      conds << self.qid(idx) + " #{func} " + self.quote(tab,idx,val)
+//    }
+//    conds
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def doSelect(fields, tab=nil, where=nil)	#Run a select from given parameters
+//#printf("Select fields:%s tab:%s where:%s\n", fields, tab, where)
+//    frtab = tab ? " from " + tab : ''
+//    if where.is_a?(Hash)
+//      where = comp_list(where,tab).join(' and ')
+//    elsif where.is_a?(Array)
+//      where = where.join(' and ')
+//    elsif !where
+//      where = ''
+//    end
+//    where = " where " + where if where != ''
+//    query = 'select ' + fields + frtab + where + ';'
+//#printf("Select query:%s\n", query)
+//    self.x query
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def doInsert(tab, data)		#Insert a record contained in a hash
+//#printf("Insert tab:%s data:%s\n", tab, data)
+//    fields, values = [], []
+//    data.each_pair { |idx, val|
+//        fields << self.qid(idx)
+//        values << self.quote(tab,idx,val)
+//    }
+//    sql = "insert into #{tab} (#{fields.join(',')}) values (#{values.join(',')}) returning *;"
+//puts 'Test_me:' + sql
+//   res = self.x(sql)
+//   raise 'Error inserting #{sql}' if res.ntuples != 1
+//   res[0]
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def doUpdate(tab, data, where)	#Update records as specified in a hash
+//#printf("Update table:%s data:%s where:%s\n", tab, data, where)
+//    setems = comp_list(data, tab)
+//    return nil if setems.length <= 0
+//    if where.is_a?(Hash)
+//      where = comp_list(where,tab).join(' and ')
+//    elsif where.is_a?(Array)
+//      where = where.join(' and ')
+//    end
+//    raise 'Illegal where clause' if !where
+//    where = "where " + where if where != ''
+//    sql = "update #{tab} set #{setems.join(',')} #{where};"
+//#puts 'Test_me:' + sql
+//    self.x sql
+//  end
+
+//# -----------------------------------------------------------------------------
+//  def doDelete(tab, where)	#Delete records from a table
+//printf("Delete from table:%s where:%s\n", tab, where)
+//    if where.is_a?(Hash)
+//      conds = comp_list(where,tab).join(' and ')
+//    elsif where.is_a?(Array)
+//      where = where.join(' and ')
+//    end
+//    raise 'Illegal where clause' if !where or where == ''
+//    where = "where " + where
+//    sql = "delete from #{tab} #{where};"
+//puts 'Test_me:' + sql
+//#    self.x sql
+//  end
+}	//class Wyseman
