@@ -200,7 +200,7 @@ puts 'Test_me:' + sql
 
 # -----------------------------------------------------------------------------
   def doUpdate(tab, data, where)	#Update records as specified in a hash
-printf("Update table:%s data:%s where:%s\n", tab, data, where)
+#printf("Update table:%s data:%s where:%s\n", tab, data, where)
     setems = comp_list(data, tab)
     return nil if setems.length <= 0
     if where.is_a?(Hash)
@@ -211,7 +211,7 @@ printf("Update table:%s data:%s where:%s\n", tab, data, where)
     raise 'Illegal where clause' if !where
     where = "where " + where if where != ''
     sql = "update #{tab} set #{setems.join(',')} #{where};"
-puts 'Test_me:' + sql
+#puts 'Test_me:' + sql
     self.x sql
   end
 

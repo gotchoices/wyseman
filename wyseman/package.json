@@ -1,0 +1,21 @@
+{
+  "name": "wyseman",
+  "version": "0.1.0",
+  "description": "Javascript interface to wyseman PostgreSQL Schema Manager",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "wyseman",
+    "postscript",
+    "schema",
+    "manager"
+  ],
+  "author": "Kyle Bateman",
+  "license": "GPL-3.0",
+  "dependencies": {
+    "pg": "^6.1.5"
+  },
+  "devDependencies": {}
+}
