@@ -1,18 +1,22 @@
 #!/usr/bin/env ruby
-#Ruby command line app for managing a schema
+#Command line interface for managing a schema in wyseman
 #TODO:
-#- Implement initialization files .wmi
-#- How to input/update table migration scripts
-#- Implement:
-#-   Generate sql to build database to a specified release specification
-#-   Generate sql to upgrade existing database to a specified release specification
-#-   Dump selected, or all tables
-#-   Restore selected or all tables
-#-   List database objects in dependency/tree order
+#X- Implement initialization files .wmi
+#X- Output SQL build files for app-level database generation
+#- How to input/update table migration scripts (such as changing column names, adding or deleting columns)
+#- Manage releases:
+#-   Move SQL output code to a separate module
+#-   Generate a version code when SQL build code is generated
+#-   Can generate SQL for any past version still in the database
+#-   Can generate sql to upgrade existing database to a specified release specification
+#- Dump selected, or all tables
+#- Restore selected or all tables
+#- List database objects in dependency/tree order
 #- 
 
 require 'optparse'
 require 'fileutils'
+require 'csv'
 require 'wyseman'
 require 'wyseman/db'
 
@@ -20,7 +24,7 @@ opts = {test:nil, dbname:nil, host:'localhost', repl:nil, prune:true, drop:true,
 
 OptionParser.new do |op|
     op.banner = "Usage: wyseman [opts] source_file(s)"
-    op.on('-?', '--help', 'Show help message') {puts opts; exit}
+    op.on('-?', '--help', 'Show help message') {STDERR.puts opts; exit}
     op.on('-n', '--dbname=name', 'Specify the database name explicitly (rather than defaulting to the username)') {|v| opts[:dbname] = v}
     op.on('-h', '--host=name', 'Specify the database host name explicitly (rather than defaulting to the username)') {|v| opts[:host] = v}
     op.on('-r', '--replace', 'Replace views/functions where possible') {opts[:repl] = true}
@@ -29,6 +33,8 @@ OptionParser.new do |op|
     op.on('-d', '--[no-]drop', 'Any objects no longer in the source file(s)') {|v| opts[:drop] = v}
     op.on('-z', '--[no-]post', 'Run the post-parse cleanup scans (default behavior)') {|v| opts[:post] = v}
     op.on('-b', '--branch=object', 'Include the specified object and all others that depend on it') {|v| opts[:branch] += v + ' '}
+    op.on('-s', '--[no-]sql', 'Write schema creation SQL to stdout') {|v| opts[:sql] = v}
+    op.on('-i', '--[no-]init', 'Write initialization SQL to stdout (as opposed to executing it in the DB)') {|v| opts[:init] = v}
 #    op.on('-w', '--work=dir', '') {|v| opts[:work] = v}
 #    op.on('-t', '--test', 'Show what would happen, but make no actual changes') {opts[:test] = true}
 #    op.on('-n', '--nowarn', "Don't give warnings for dropping populated tables") {opts[:warn] = false}
@@ -67,8 +73,54 @@ if opts[:make]
   end
 end
 
-if post_sql != ''
-  puts "Running Initialization SQL"
-#  puts "SQL:"+post_sql				#Debug
-  dbc.x(post_sql)
+if opts[:sql]					#Generate schema creation SQL on stdout
+  puts "--Schema Creation SQL:\nbegin;\ncreate schema wm;"
+
+  puts %Q{create or replace function wm.create_group(grp varchar) returns boolean language plpgsql as $$
+  begin\n    if not exists (select rolname from pg_roles where rolname = grp) then
+      execute 'create role ' || grp || ';'; return true;
+    end if;\n    return false;\n  end;\n$$;}
+  
+  roles = []					#Keep track of roles we have created
+  dbc.x("select obj_nam,crt_sql,grants from wm.objects_v_depth where release = wm.release() order by depth,obj_nam").values.each {|row|
+#    puts "--Create #{row[0]}:"
+    puts row[1]
+    CSV.parse(row[2].delete("{}")).each {|row|		#For each grant record
+      row.each {|grec|
+#printf("Grec:%s\n", grec)
+        obj_nam, mod, level, priv = grec.split(',')
+        otyp, onam = obj_nam.split(':')
+        perm = (mod == 'public') ? mod : mod.to_s + '_' + level.to_s
+        otyp = (otyp == 'view') ? 'table' : otyp
+        if !roles.include?(perm) && perm != 'public'
+          puts "select wm.create_group('#{perm}');"
+          roles << perm 
+        end
+        puts "grant #{priv} on #{otyp} #{onam} to #{perm};"
+      }
+    }
+  }
+
+  puts "\n--Data Dictionary:"
+  %w{wm.table_text wm.column_text wm.value_text wm.error_text wm.table_style wm.column_style wm.column_native}.each {|tab|
+    flds = dbc.x("select col from wm.column_pub where obj = '#{tab}' order by field").values.join(',')
+    printf("copy #{tab} (%s) from stdin;\n", flds)
+    dbc.copy_data "copy #{tab} to stdout" do
+      while (row = dbc.get_copy_data)
+        puts row
+      end
+    end
+    puts "\\.\n\n"
+  }
+end
+
+if post_sql != ''				#Initialization of table data
+  if opts[:init] || opts[:sql]
+    puts "--Initialization SQL:"
+    puts post_sql				#See initialization code on stdout
+    puts "commit;"
+  else
+    STDERR.puts "Running Initialization SQL"
+    dbc.x(post_sql)
+  end
 end
