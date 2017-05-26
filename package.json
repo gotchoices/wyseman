@@ -1,8 +1,8 @@
 {
   "name": "wyseman",
   "version": "0.1.0",
-  "description": "Javascript interface to wyseman PostgreSQL Schema Manager",
-  "main": "index.js",
+  "description": "Javascript API to wyseman PostgreSQL Schema Manager",
+  "main": "lib/wyseman.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
