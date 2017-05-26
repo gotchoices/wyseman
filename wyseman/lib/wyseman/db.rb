@@ -68,9 +68,10 @@ class DB < PG::Connection
 # -----------------------------------------------------------------------------
   def quote(tab, col, val, errchk = false)		#Return a value with single quote, if 
     return val if col == 'oid'
+#printf("tab:%s col:%s val:%s\n", tab, col, val)
     tp = (cdat = column(tab, col))['type']
 #printf("  cdat:%s\n", cdat)
-    return 'null' if val == '' && cdat['nonull'] == 't'
+    return 'null' if val == '' && cdat['nonull'] != 't'
     if %w{numeric int int4 int8 float float4 float8}.include?(tp)
       val = val.gsub(/[$,]/,'')
       if val == ''
