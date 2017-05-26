@@ -73,6 +73,7 @@ if opts[:make]
   end
 end
 
+# -----------------------------------------------------------------------------
 if opts[:sql]					#Generate schema creation SQL on stdout
   puts "--Schema Creation SQL:\nbegin;\ncreate schema wm;"
 
@@ -103,14 +104,22 @@ if opts[:sql]					#Generate schema creation SQL on stdout
 
   puts "\n--Data Dictionary:"
   %w{wm.table_text wm.column_text wm.value_text wm.error_text wm.table_style wm.column_style wm.column_native}.each {|tab|
-    flds = dbc.x("select col from wm.column_pub where obj = '#{tab}' order by field").values.join(',')
-    printf("copy #{tab} (%s) from stdin;\n", flds)
-    dbc.copy_data "copy #{tab} to stdout" do
-      while (row = dbc.get_copy_data)
-        puts row
-      end
+    flds = dbc.one("select array_to_string(array(select col from wm.column_pub where obj = '#{tab}' order by field),',')")[0]
+#printf("flds:%s\n",flds)
+    printf("insert into #{tab} (%s) values\n", flds)
+    irows = []
+    res = dbc.x("select #{flds} from #{tab}")
+    for i in 0..(res.ntuples-1)
+      row = res[i]
+#printf("row:%s\n",row)
+      icols = []
+      flds.split(',').each {|f|
+#printf(" f:%s col:%s\n", f, row[f])
+        icols << dbc.quote(tab,f,row[f])
+      }
+      irows << ("(" + icols.join(',') + ")")
     end
-    puts "\\.\n\n"
+    puts "  " + irows.join(",\n  ") + ";\n\n"
   }
 end
 
