@@ -14,7 +14,7 @@ module Wyseman
 class DB < PG::Connection
   def initialize (*args)
     begin
-      @lang = 'en'					#Fixme
+      @lang = 'en'					#Fixme: multi-language
       super(*args)
     rescue PG::ConnectionBad				#If can't connect
       (args[-1] = (oldh = args[-1]).dup)[:dbname] = 'template1'
