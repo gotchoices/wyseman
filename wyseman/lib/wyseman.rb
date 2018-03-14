@@ -128,5 +128,9 @@ class Session
     @db.t("select case when wm.check_drafts(#{prune}) then wm.check_deps() end;")	#Check versions/dependencies
   end
 
+  def destroy ()
+    @tclip.delete()
+  end
+
 end	#class Session
 end	#module Wyseman
