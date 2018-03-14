@@ -48,6 +48,21 @@ tabtext wm.depends_v	{Dependencies}	{A recursive view showing which database obj
     {fpath		{Full Path}	{The full path of the dependency tree above this object (including this object).}}
 }
 
+tabtext wm.table_style	{Table Styles}	{Contains style flags to tell the GUI how to render each table or view} {
+    {ts_sch		{Schema Name}	{The schema for the table this style pertains to}}
+    {ts_tab		{Table Name}	{The name of the table this style pertains to}}
+    {sw_name		{Name}		{The name of the style being described}}
+    {sw_value		{Value}		{The value for this particular style}}
+}
+
+tabtext wm.column_style	{Column Styles}	{Contains style flags to tell the GUI how to render the columns of a table or view} {
+    {cs_sch		{Schema Name}	{The schema for the table this style pertains to}}
+    {cs_tab		{Table Name}	{The name of the table containing the column this style pertains to}}
+    {cs_col		{Column Name}	{The name of the column this style pertains to}}
+    {sw_name		{Name}		{The name of the style being described}}
+    {sw_value		{Value}		{The value for this particular style}}
+}
+
 tabtext wm.table_text	{Table Text}	{Contains a description of each table in the system} {
     {tt_sch		{Schema Name}	{The schema this table belongs to}}
     {tt_tab		{Table Name}	{The name of the table being described}}
@@ -75,14 +90,13 @@ tabtext wm.value_text	{Value Text}	{Contains a description for the values which 
     {help		{Description}	{A longer description of what it means when the column is set to this value}}
 }
 
-tabtext wm.error_text	{Value Text}	{Contains a description for the values which certain columns may be set to.  Used only for columns that can be set to one of a finite set of values (like an enumerated type).} {
-    {vt_sch		{Schema Name}	{The schema of the table this column belongs to}}
-    {vt_tab		{Table Name}	{The name of the table this column is in}}
-    {vt_col		{Column Name}	{The name of the column whose values are being described}}
-    {value		{Value}		{The name of the value being described}}
-    {language		{Language}	{The language this description is in}}
-    {title		{Title}		{A short title for the value}}
-    {help		{Description}	{A longer description of what it means when the column is set to this value}}
+tabtext wm.message_text	{Message Text}	{Contains messages in a particular language to describe an error, or a widget feature or button} {
+    {mt_sch		{Schema Name}	{The schema of the table this message belongs to}}
+    {mt_tab		{Table Name}	{The name of the table this message belongs to is in}}
+    {code		{Code}		{A unique code referenced in the source code to evoke this message in the language of choice}}
+    {language		{Language}	{The language this message is in}}
+    {title		{Title}		{A short version for the message, or its alert}}
+    {help		{Description}	{A longer, more descriptive version of the message}}
 }
     
 tabtext wm.column_native {Native Columns} {Contains cached information about the tables and their columns which various higher level view columns derive from.  To query this directly from the information schema is somewhat slow, so wyseman caches it here when building the schema for faster access.} {
