@@ -6,12 +6,15 @@ Postgres:  See README.pg
   (mychips).
 
 Ruby postgresql plugin
-  gem install ruby-pg		;or
-  dnf install rubygem-pg
+  dnf install postgresql-devel redhat-rpm-config
+  gem install json
+  gem install pg		;or
+
+  dnf install rubygem-pg	(had trouble with this)
   
 ruby-tcltk
-  gem install tcltklib		;or
-  dnf install ruby-tcltk
+  gem install tk		;or		(was libtcltk)
+  dnf install rubygem-tk
 
 -----------------------------------------------------------------------
 Wyseman includes an executable that can be run in a variety of modes
