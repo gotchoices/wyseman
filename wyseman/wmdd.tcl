@@ -26,8 +26,8 @@ proc wmdd::style {table {column {}}} {
     lassign [wmdd::table_parts $table] sch tab
     if {![info exists v($idx)]} {
         set switches {}
-        if {$column == {_}} {
-            set v($idx) [sql::qlist "select distinct cs_col from wm.column_style where cs_sch = '$sch' and cs_tab = '$tab' order by 1;"]
+        if {$column == {_}} {		;#Join with column dat to make sure columns are actually in the view
+            set v($idx) [sql::qlist "select distinct s.cs_col from wm.column_style s join wm.column_data d on s.cs_sch = d.cdt_sch and s.cs_tab = d.cdt_tab and s.cs_col = d.cdt_col where cs_sch = '$sch' and cs_tab = '$tab' order by 1;"]
             return $v($idx)
         } elseif {$column == {}} {
             set ql [sql::qlist "select sw_name, sw_value from wm.table_style where ts_sch = '$sch' and ts_tab = '$tab';"]
