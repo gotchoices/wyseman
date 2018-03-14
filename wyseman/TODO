@@ -1,6 +1,6 @@
 Wyseman TODO
-- Implement preferred display columns per view
-- Implement preferred display order per view
+X- Implement preferred display columns per view
+X- Implement preferred display order per view
 - Implement custom (user defined) control layer
 - Allow user defined hooks on standard controls
 - 
