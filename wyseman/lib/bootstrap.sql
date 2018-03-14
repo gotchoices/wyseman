@@ -15,6 +15,7 @@
 -- X- Items must track which module,release they are a part of
 -- X- Find orphaned objects and delete them
 -- X- When deleting an item from objects, delete the actual object too
+-- - Is there a way to create /var/tmp/wyseman automatically if it doesn't exist?
 -- - Bug: orphan check only works if at least one object still remains in the source file
 -- - 
 -- - Test: Can't change items part of a prior release
