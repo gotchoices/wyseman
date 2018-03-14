@@ -12,7 +12,7 @@ namespace eval wmparse {
     set v(paths)	{}	;#paths of any files we parse in this run
     set v(requires)	{}	;#list of required files already sourced
     set v(objs)		{table view sequence index function trigger rule schema other grant tabtext tabdef define field require module}
-    set v(int) [interp create]
+    set v(int)		[interp create]
     foreach i $v(objs) {$v(int) alias $i wmparse::$i}
     $v(int) alias def def
 
@@ -472,15 +472,15 @@ proc wmparse::table_parts {table {join {}}} {
 #------------------------------------------------------------
 proc wmparse::tabtext {table args} {
     argform {title help fields} args
-    argnorm {{title 2} {help 2} {language 2} {fields 1} {errors 2}} args
+    argnorm {{title 2} {help 2} {language 2} {fields 1} {errors 2} {messages 2 errors}} args
     lassign [table_parts $table] schema table
     array set ca {language en}
     foreach tag {language} {xswitchs $tag args ca($tag)}
     foreach tag {title help fields errors} {set ca($tag) [regsub -all {'} [wmparse::macsub [xswitchs $tag args]] {''}]}
-    set    query "delete from wm.table_text  where tt_sch = '$schema' and tt_tab = '$table' and language = '$ca(language)';\n"
-    append query "delete from wm.column_text where ct_sch = '$schema' and ct_tab = '$table' and language = '$ca(language)';\n"
-    append query "delete from wm.value_text  where vt_sch = '$schema' and vt_tab = '$table' and language = '$ca(language)';\n"
-    append query "delete from wm.error_text  where et_sch = '$schema' and et_tab = '$table' and language = '$ca(language)';\n"
+    set    query "delete from wm.table_text   where tt_sch = '$schema' and tt_tab = '$table' and language = '$ca(language)';\n"
+    append query "delete from wm.column_text  where ct_sch = '$schema' and ct_tab = '$table' and language = '$ca(language)';\n"
+    append query "delete from wm.value_text   where vt_sch = '$schema' and vt_tab = '$table' and language = '$ca(language)';\n"
+    append query "delete from wm.message_text where mt_sch = '$schema' and mt_tab = '$table' and language = '$ca(language)';\n"
     if {$ca(title) != {} || $ca(help) != {}} {
         append query "insert into wm.table_text (tt_sch,tt_tab,language,title,help) values ('$schema','$table','$ca(language)','$ca(title)',E'$ca(help)');\n"
     }
@@ -503,8 +503,9 @@ proc wmparse::tabtext {table args} {
         argform {code title help} rec
         argnorm {{code 2} {title 2} {help 2}} rec
         foreach tag {code title help} {set ce($tag) [xswitchs $tag rec]}
-        append query "insert into wm.error_text (et_sch,et_tab,code,language,title,help) values ('$schema','$table','$ce(code)','$ca(language)','$ce(title)','$ce(help)');\n"
+        append query "insert into wm.message_text (mt_sch,mt_tab,code,language,title,help) values ('$schema','$table','$ce(code)','$ca(language)','$ce(title)','$ce(help)');\n"
     }
+#puts "query:$query"
     hand_query $table $query
 }
 
@@ -519,7 +520,7 @@ proc wmparse::tabdef {table args} {
 #    set ob($name.defs) $args
 
     argform {focus fields} args
-    argnorm {{focus 2} {fields 1} {inherits 1}} args
+    argnorm {{focus 2} {fields 1} {inherits 1} {display 1} {sort 2}} args
     lassign [table_parts $table] schema table
 
     set fargs [xswitchs fields args]		;#grab the field arguments
@@ -530,13 +531,15 @@ proc wmparse::tabdef {table args} {
     foreach fa $fargs {				;#for each column
         set fa [lassign $fa tag]
         argform {style size sub} fa		;#add switch names to all args
-#        argnorm {{column 2} {title 2} {help 2} {subframe}} fa
+        argnorm {{column 2} {title 2} {help 2} {subframe 2} {onvalue 3} {offvalue 4} {special 3} {spf 3 special} {background 2} {bg 2 background} {justify 2} {initial 3} {template 3} {optional 3} {state 3} {write 2} {depend 3} {display 2} {inside 2} {sort 2} {hint 2}} fa
 
         foreach {sw va} $fa {
             if {[string range $sw 0 0] != {-}} {error "Expected switch: $sw"}
+#            if {$va == {}} continue		;#exclude blank switches? (no)
             append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) values ('$schema','$table','$tag','[string range $sw 1 end]','[regsub {'} $va {''}]');\n"
         }
     }
+
     foreach {sw va} $args {
         if {[string range $sw 0 0] != {-}} {error "Expected switch: $sw"}
         if {$sw == {-inherits}} {
@@ -546,6 +549,22 @@ proc wmparse::tabdef {table args} {
 #puts "query:$query"
         } else {
             append query "insert into wm.table_style (ts_sch,ts_tab,sw_name,sw_value) values ('$schema','$table','[string range $sw 1 end]','[regsub {'} $va {''}]');\n"
+        }
+    }
+
+    if {[set focus [lindex [xswitchs focus args] 0]] != {}} {	;#Apply default focus column to correct column
+        append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) values ('$schema','$table','$focus','focus','true') on conflict do nothing;\n"
+    }
+    foreach tabswitch {display sort} {		;#Apply table styles to individual columns
+        if {[set cols [xswitchs $tabswitch args]] != {}} {
+            set fldlist {}; set idxlist {}
+            foreach c $cols {			;#fields with a leading '!' get set to zero (in fldlist, but not in idxlist)
+              if {[regexp {^!(.*)$} $c junk field]} {set c $field} else {lappend idxlist $c}
+              lappend fldlist $c
+            }
+            set fldlist "'[join $fldlist {','}]'"; set idxlist "'[join $idxlist {','}]'"
+#puts "fldlist:$fldlist"; puts "idxlist:$idxlist"
+            append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) select cdt_sch,cdt_tab,cdt_col,'$tabswitch',coalesce(array_position(Array\[$idxlist\], cdt_col::text), 0) from wm.column_data where cdt_sch = '$schema' and cdt_tab = '$table' and cdt_col in ($fldlist) on conflict do nothing;\n"
         }
     }
 
