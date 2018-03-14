@@ -1,3 +1,11 @@
+Wyseman TODO
+- Implement preferred display columns per view
+- Implement preferred display order per view
+- Implement custom (user defined) control layer
+- Allow user defined hooks on standard controls
+- 
+
+Ruby port Items:
 X- Make this still build as a TCL run-time library
 - If wylib is installed, wysegi should run properly from ruby gem
 X- All files are:
