@@ -2,6 +2,8 @@
 #Just for debugging usage
 #usage: source setpath
 
-export TCLLIBPATH=". /home/kyle/atisrc/tcl/wylib-0.20 /home/kyle/devel /usr/lib"
-export WYLIB_SITELIB=atilib
-export PATH="$PATH:/home/kyle/devel/wyseman"
+export TCLLIBPATH=". /home/kyle/share/devel /usr/lib"
+export WYATTDB="$USER"
+#export WYLIB_SITELIB=atilib
+export PATH="$PATH:/home/kyle/share/devel/js/wyseman/bin"
+export RUBYLIB="/home/kyle/share/devel/js/wyseman/lib"
