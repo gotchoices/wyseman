@@ -116,10 +116,11 @@ proc init_table {table {force 0}} {
 # When executing a line in the general tables preview
 # Load up information for building a dbp and a dbe for the table
 #----------------------------------------------------
-proc exec_table {table} {
+proc exec_table {pkey} {
     global cnf
-#puts "exec_table: $table"
-    set obj [join $table .]
+    lassign $pkey schema table lang
+#puts "exec_table: $schema $table lang:$lang"
+    set obj [join [list $schema $table] .]
     init_table $obj 1
     top::top [translit . _ prev_$obj] -title "Preview $cnf(title.$obj):" -build "build_prev %w $obj" -reopen 1
 }
