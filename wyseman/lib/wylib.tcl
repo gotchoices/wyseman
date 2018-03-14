@@ -1,4 +1,4 @@
-# Misc functions that don't really have a good home and are not in a namespace
+# Misc functions borrowed from wylib we will use in our schema parsing
 #------------------------------------------
 #Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
 
@@ -69,12 +69,6 @@ proc xswitchs {sw av {vv {}}} {
     upvar $av alist
     set retval {}
 
-#Fails if non-last switch value is {}:
-#    while {[set x [uplevel xswitch $sw $av $vv]] != {}} {
-#        set retval $x
-#    }
-
-#This keeps going as long as target switches remain in command line:
     while {[lcontain $alist "-$sw"]} {
         set retval [uplevel xswitch $sw $av $vv]
     }
@@ -86,4 +80,3 @@ proc xswitchs {sw av {vv {}}} {
 proc lcontain {list element} {
     if {[lsearch -exact $list $element] >= 0} {return true} else {return false}
 }
-
