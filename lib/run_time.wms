@@ -1,7 +1,8 @@
 #Schema to track meta-data about tables, columns, views, etc.
 #Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
 #TODO
-#- A pkey column, in a vew but by a different name, doesn't seem to show up in the view as a pkey, without an explicity -primary reference
+#- Fix support for multiple languages
+#- A pkey column, in a view but by a different name, doesn't seem to show up in the view as a pkey, without an explicity -primary reference
 #- 
 module wyseman
 
@@ -64,14 +65,14 @@ table wm.value_text {} {
 
 # Help text for schema error and other messages
 #-------------------------------------------
-table wm.error_text {} {
-    et_sch		name
-  , et_tab		name
-  , code		varchar(4)
+table wm.message_text {} {
+    mt_sch		name
+  , mt_tab		name
+  , code		varchar
   , language		varchar not null
   , title		varchar		-- brief title for error message
   , help		varchar		-- longer help description
-  , primary key (et_sch, et_tab, code, language)
+  , primary key (mt_sch, mt_tab, code, language)
 } -grant public
     
 # A table to cache information about the native source(s) of a view's column
@@ -95,43 +96,42 @@ index {} wm.column_native {nat_sch nat_tab}
 
 # Backend information about tables (includes system tables)
 #-------------------------------------------
-view wm.table_data {wm.column_data} {
-    select
-        ns.nspname		as td_sch
-      , cl.relname		as td_tab
-      , cl.relkind		as tab_kind
-      , cl.relhaspkey		as has_pkey
-      , cl.relnatts		as columns
-      , kd.pkey
-    from		pg_class	cl
-    join		pg_namespace	ns	on cl.relnamespace = ns.oid
-    left join		(select cdt_sch,cdt_tab,array_agg(cdt_col) as pkey from (select cdt_sch,cdt_tab,cdt_col from wm.column_data where pkey order by field) sq group by 1,2) kd on kd.cdt_sch = ns.nspname and kd.cdt_tab = cl.relname
-    where		cl.relkind in ('r','v');	--only show tables and views
+view wm.table_data {wm.column_data} {select
+    ns.nspname				as td_sch
+  , cl.relname				as td_tab
+  , ns.nspname || '.' || cl.relname	as obj
+  , cl.relkind				as tab_kind
+  , cl.relhaspkey			as has_pkey
+  , cl.relnatts				as cols
+  , kd.pkey
+  from		pg_class	cl
+  join		pg_namespace	ns	on cl.relnamespace = ns.oid
+  left join	(select cdt_sch,cdt_tab,array_agg(cdt_col) as pkey from (select cdt_sch,cdt_tab,cdt_col from wm.column_data where pkey order by field) sq group by 1,2) kd on kd.cdt_sch = ns.nspname and kd.cdt_tab = cl.relname
+  where		cl.relkind in ('r','v');	--only show tables and views
 } -primary {td_sch td_tab} -grant public
 
-# Unified information about non-system tables
+# Unified information about non-system tables (legacy for TCL, mingles metadata and language data)
 #-------------------------------------------
-view wm.table_pub {wm.table_data wm.table_text} {
-    select
-        td.td_sch				as sch
-      , td.td_tab				as tab
-      , td.tab_kind
-      , td.has_pkey
-      , td.pkey
-      , td.columns
-      , tt.language
-      , tt.title
-      , tt.help
-      , td.td_sch || '.' || td.td_tab	as obj
-    from		wm.table_data	td
-    left join		wm.table_text	tt on td.td_sch = tt.tt_sch and td.td_tab = tt.tt_tab;
---        where		not td.td_sch in ('pg_catalog','information_schema');
-} -primary {sch tab} -grant public
+view wm.table_pub {wm.table_data wm.table_text} {select
+    td.td_sch				as sch
+  , td.td_tab				as tab
+  , td.td_sch || '.' || td.td_tab	as obj
+  , td.tab_kind
+  , td.has_pkey
+  , td.pkey
+  , td.cols
+  , tt.language
+  , tt.title
+  , tt.help
+  from		wm.table_data		td
+  left join	wm.table_text		tt on td.td_sch = tt.tt_sch and td.td_tab = tt.tt_tab;
+--    where	not td.td_sch in ('pg_catalog','information_schema');
+} -primary {sch tab language} -grant public
 
-# A permissioned view of the same name in information schema
+# A public version of a view by the same name in information schema
 #-------------------------------------------
 view wm.view_column_usage {} {
-    select * from information_schema.view_column_usage
+  select * from information_schema.view_column_usage
 } -primary {view_schema view_name} -grant public
 
 # Initialize the cache of native tables/columns with default values
@@ -207,24 +207,23 @@ function {wm.init_dictionary()} {wm.default_native() wm.column_native wm.column_
 
 # Backend information about columns
 #-------------------------------------------
-view wm.column_data {wm.column_native} {
-  select
-      n.nspname		as cdt_sch
-    , c.relname		as cdt_tab
-    , a.attname		as cdt_col
-    , a.attnum		as field
-    , t.typname		as type
-    , na.attnotnull	as nonull		-- notnull of native table
-    , nd.adsrc		as def
-    , case when a.attlen < 0 then null else a.attlen end 	as length
-    , coalesce(na.attnum = any((select conkey from pg_constraint
-          where connamespace = nc.relnamespace
-          and conrelid = nc.oid and contype = 'p')::int4[]),'f') as is_pkey
-    , ts.pkey		-- like ispkey, but can be overridden explicitly in the wms file
-    , c.relkind		as tab_kind
-    , ts.nat_sch
-    , ts.nat_tab
-    , ts.nat_col
+view wm.column_data {wm.column_native} {select
+    n.nspname		as cdt_sch
+  , c.relname		as cdt_tab
+  , a.attname		as cdt_col
+  , a.attnum		as field
+  , t.typname		as type
+  , na.attnotnull	as nonull		-- notnull of native table
+  , nd.adsrc		as def
+  , case when a.attlen < 0 then null else a.attlen end 	as length
+  , coalesce(na.attnum = any((select conkey from pg_constraint
+        where connamespace = nc.relnamespace
+        and conrelid = nc.oid and contype = 'p')::int4[]),'f') as is_pkey
+  , ts.pkey		-- like ispkey, but can be overridden explicitly in the wms file
+  , c.relkind		as tab_kind
+  , ts.nat_sch
+  , ts.nat_tab
+  , ts.nat_col
   from			pg_class	c
       join		pg_attribute	a	on a.attrelid =	c.oid
       join		pg_type		t	on t.oid = a.atttypid
@@ -238,14 +237,13 @@ view wm.column_data {wm.column_native} {
 --        and a.attnum >= 0 			-- don't include system columns
 } -primary {cdt_sch cdt_tab cdt_col} -grant public
 
-# Unified information about columns in non-system tables
+# Unified information about columns in non-system tables (legacy for TCL, mingles metadata and language data)
 #-------------------------------------------
-view wm.column_pub {wm.column_data wm.column_text} {
-  select
+view wm.column_pub {wm.column_data wm.column_text} {select
     cd.cdt_sch					as sch
   , cd.cdt_tab					as tab
-  , cd.cdt_col					as col
   , cd.cdt_sch || '.' || cd.cdt_tab		as obj
+  , cd.cdt_col					as col
   , cd.field
   , cd.type
   , cd.nonull
@@ -264,10 +262,110 @@ view wm.column_pub {wm.column_data wm.column_text} {
     left join	wm.column_text vt	on vt.ct_sch = cd.cdt_sch and vt.ct_tab = cd.cdt_tab and vt.ct_col = cd.cdt_col
     left join	wm.column_text nt	on nt.ct_sch = cd.nat_sch and nt.ct_tab = cd.nat_tab and nt.ct_col = cd.nat_col
 
-    where		cd.cdt_col != '_oid'
+    where	cd.cdt_col != '_oid'
     and		cd.field >= 0;
---        and		not cd.cdt_sch in ('pg_catalog','information_schema');
 } -primary {sch tab col} -grant public
+
+# Meta-data about column styles, as may be inherited from a native column
+#-------------------------------------------
+view wm.column_istyle {wm.column_style wm.column_native} {select
+    coalesce(cs.cs_sch, zs.cs_sch)		as cs_sch
+  , coalesce(cs.cs_tab, zs.cs_tab)		as cs_tab
+  , coalesce(cs.cs_sch, zs.cs_sch) || '.' || coalesce(cs.cs_tab, zs.cs_tab)		as cs_obj
+  , coalesce(cs.cs_col, zs.cs_col)		as cs_col
+  , coalesce(cs.sw_name, zs.sw_name)		as sw_name
+  , coalesce(cs.sw_value, zs.sw_value)		as sw_value
+  , cs.sw_value					as cs_value
+  , zs.nat_sch					as nat_sch
+  , zs.nat_tab					as nat_tab
+  , zs.nat_col					as nat_col
+  , zs.sw_value					as nat_value
+
+  from		wm.column_style  cs
+  full join	( select nn.cnt_sch as cs_sch, nn.cnt_tab as cs_tab, nn.cnt_col as cs_col, ns.sw_name, ns.sw_value, nn.nat_sch, nn.nat_tab, nn.nat_col
+    from	wm.column_native nn
+    join	wm.column_style  ns	on ns.cs_sch = nn.nat_sch and ns.cs_tab = nn.nat_tab and ns.cs_col = nn.nat_col
+  )		as		 zs	on zs.cs_sch = cs.cs_sch and zs.cs_tab = cs.cs_tab and zs.cs_col = cs.cs_col and zs.sw_name = cs.sw_name
+} -primary {cs_sch cs_tab cs_col sw_name} -grant public
+
+# Meta-data about columns
+#-------------------------------------------
+view wm.column_meta {wm.column_data wm.column_istyle} {select
+    cd.cdt_sch					as sch
+  , cd.cdt_tab					as tab
+  , cd.cdt_sch || '.' || cd.cdt_tab		as obj
+  , cd.cdt_col					as col
+  , cd.field
+  , cd.type
+  , cd.nonull
+  , cd.def
+  , cd.length
+  , cd.is_pkey
+  , cd.pkey
+  , cd.nat_sch
+  , cd.nat_tab
+  , cd.nat_sch || '.' || cd.nat_tab		as nat
+  , cd.nat_col
+  , (select array_agg(distinct value) from wm.value_text vt where vt.vt_sch = cd.nat_sch and vt.vt_tab = cd.nat_tab and vt.vt_col = cd.nat_col) as values
+  , array (select array[sw_name, sw_value] from wm.column_istyle cs where cs.cs_sch = cd.cdt_sch and cs.cs_tab = cd.cdt_tab and cs.cs_col = cd.cdt_col order by sw_name) as styles
+  from		wm.column_data cd
+    where	cd.cdt_col != '_oid'
+    and		cd.field >= 0;
+} -primary {sch tab col} -grant public
+
+# Column language data
+#-------------------------------------------
+view wm.column_lang {wm.column_data wm.column_text wm.value_text} {select
+    cd.cdt_sch					as sch
+  , cd.cdt_tab					as tab
+  , cd.cdt_sch || '.' || cd.cdt_tab		as obj
+  , cd.cdt_col					as col
+  , cd.nat_sch
+  , cd.nat_tab
+  , cd.nat_sch || '.' || cd.nat_tab		as nat
+  , cd.nat_col
+  , (select array_agg(to_jsonb(d)) from (select value, title, help from wm.value_text vt where vt.vt_sch = cd.nat_sch and vt.vt_tab = cd.nat_tab and vt.vt_col = cd.nat_col and vt.language = nt.language order by value) d) as values
+  , coalesce(ct.language, nt.language, 'en')	as language
+  , coalesce(ct.title, nt.title, cd.cdt_col)	as title
+  , coalesce(ct.help, nt.help)			as help
+  from		wm.column_data cd
+    left join	wm.column_text nt	on nt.ct_sch = cd.nat_sch and nt.ct_tab = cd.nat_tab and nt.ct_col = cd.nat_col
+    left join	wm.column_text ct	on ct.ct_sch = cd.cdt_sch and ct.ct_tab = cd.cdt_tab and ct.ct_col = cd.cdt_col and ct.language = nt.language
+
+    where	cd.cdt_col != '_oid'
+    and		cd.field >= 0;
+} -primary {sch tab col} -grant public
+
+# Meta-data about tables/views, for public access
+#-------------------------------------------
+view wm.table_meta {wm.table_data wm.column_meta} {select
+    td.td_sch				as sch
+  , td.td_tab				as tab
+  , td.td_sch || '.' || td.td_tab	as obj
+  , td.tab_kind
+  , td.has_pkey
+  , to_jsonb(td.pkey)			as pkey
+  , td.cols
+  , array (select array[sw_name, sw_value] from wm.table_style ts where ts.ts_sch = td.td_sch and ts.ts_tab = td.td_tab order by sw_name) as styles
+  , (select array_agg(to_jsonb(d)) from (select col, field, type, nonull, length, pkey, to_jsonb(values) as values, jsonb_object(styles) as styles from wm.column_meta cm where cm.sch = td.td_sch and cm.tab = td.td_tab) d) as columns
+  from		wm.table_data		td;
+} -primary {sch tab} -grant public
+
+# Unified information about non-system tables (legacy for TCL, mingles metadata and language data)
+# Language text about tables/views, for public access
+#-------------------------------------------
+view wm.table_lang {wm.table_data wm.table_text wm.column_lang wm.message_text} {select
+    td.td_sch				as sch
+  , td.td_tab				as tab
+  , td.td_sch || '.' || td.td_tab	as obj
+  , tt.language
+  , tt.title
+  , tt.help
+  , array (select jsonb_object(array['code', code, 'title', title, 'help', help]) from wm.message_text mt where mt.mt_sch = td.td_sch and mt.mt_tab = td.td_tab and mt.language = tt.language order by code) as messages
+  , (select array_agg(to_jsonb(d)) from (select col, title, help, values from wm.column_lang cl where cl.sch = td.td_sch and cl.tab = td.td_tab and cl.language = tt.language) d) as columns
+  from		wm.table_data		td
+  left join	wm.table_text		tt on td.td_sch = tt.tt_sch and td.td_tab = tt.tt_tab;
+} -primary {sch tab language} -grant public
 
 # For initializing a record to default values
 #-------------------------------------------
@@ -403,7 +501,7 @@ view wm.fkey_pub {wm.fkey_data wm.column_native} {
   , coalesce(vt.title, nt.title, tn.cnt_col)	as title
   , coalesce(vt.help, nt.help)			as help
 
-  from	wm.fkey_data	kd
+  from	wm.fkey_data	kd			--Fixme: Strip language data out to separate view
     join		wm.column_native	tn on tn.nat_sch = kd.kyt_sch and tn.nat_tab = kd.kyt_tab and tn.nat_col = kd.kyt_col
     join		wm.column_native	fn on fn.nat_sch = kd.kyf_sch and fn.nat_tab = kd.kyf_tab and fn.nat_col = kd.kyf_col
     left join		wm.column_text vt	on vt.ct_sch = tn.cnt_sch and vt.ct_tab = tn.cnt_tab and vt.ct_col = tn.cnt_col

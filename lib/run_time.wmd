@@ -1,7 +1,7 @@
 #Text descriptions for meta-data tables
 #Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
 
-foreach x {table_text column_text value_text error_text column_pub} {
+foreach x {table_text column_text value_text message_text column_pub} {
   tabdef wm.$x -focus code -fields {
     {language	-size  4}
     {title	-size 40}
