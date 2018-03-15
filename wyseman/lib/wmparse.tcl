@@ -24,6 +24,13 @@ namespace eval wmparse {
     variable md			;#macro definitions
 }
 
+# Destroy our slave interpretor (ruby-tk-0.2.0 needs this or it generate an error on exit)
+#------------------------------------------------------------
+proc wmparse::cleanup {} {
+    variable v
+    interp delete $v(int)
+}
+
 # Record the module name for any defined objects
 #------------------------------------------------------------
 proc wmparse::module {args} {
