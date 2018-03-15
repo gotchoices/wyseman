@@ -12,7 +12,7 @@
 #- More TODOs in wmparse.tcl (implement text, defaults)
 #- 
 
-require 'tcltklib'	#See: https://github.com/ruby/tk/blob/master/MANUAL_tcltklib.eng
+require 'tk'		#See: https://github.com/ruby/tk/blob/master/MANUAL_tcltklib.eng
 require 'wyseman/db'
 
 module Wyseman
@@ -129,6 +129,7 @@ class Session
   end
 
   def destroy ()
+    @tclip._eval("wmparse::cleanup")
     @tclip.delete()
   end
 
