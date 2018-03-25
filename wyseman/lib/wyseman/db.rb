@@ -112,7 +112,7 @@ class DB < PG::Connection
 #printf("table tab:%s\n", tab)
     if !@table_data[idx]
       s, t = table_split(tab)
-      res = self.x("select tab_kind,has_pkey,columns,pkey from wm.table_data where td_sch = '#{esc(s)}' and td_tab = '#{esc(t)}';")
+      res = self.x("select tab_kind,has_pkey,cols,pkey from wm.table_data where td_sch = '#{esc(s)}' and td_tab = '#{esc(t)}';")
       if res.ntuples >= 1
         @table_data[idx] = res[0]
       end
