@@ -106,7 +106,7 @@ view wm.table_data {wm.column_data} {select
   , kd.pkey
   from		pg_class	cl
   join		pg_namespace	ns	on cl.relnamespace = ns.oid
-  left join	(select cdt_sch,cdt_tab,array_agg(cdt_col) as pkey from (select cdt_sch,cdt_tab,cdt_col from wm.column_data where pkey order by field) sq group by 1,2) kd on kd.cdt_sch = ns.nspname and kd.cdt_tab = cl.relname
+  left join	(select cdt_sch,cdt_tab,array_agg(cdt_col) as pkey from (select cdt_sch,cdt_tab,cdt_col,field from wm.column_data where pkey order by 1,2,4) sq group by 1,2) kd on kd.cdt_sch = ns.nspname and kd.cdt_tab = cl.relname
   where		cl.relkind in ('r','v');	--only show tables and views
 } -primary {td_sch td_tab} -grant public
 
@@ -420,10 +420,8 @@ view wm.fkeys_data {wm.column_names(oid,int4[])} {
 
 # Information about foreign keys to public tables/views
 #-------------------------------------------
-view wm.fkeys_pub {wm.fkeys_data wm.column_native} {
-  select
-    tk.conname
-  , tn.cnt_sch				as tt_sch
+view wm.fkeys_pub {wm.fkeys_data wm.column_native} {select
+    tn.cnt_sch				as tt_sch
   , tn.cnt_tab				as tt_tab
   , tn.cnt_sch || '.' || tn.cnt_tab	as tt_obj
   , tk.kst_cols				as tt_cols
@@ -437,6 +435,7 @@ view wm.fkeys_pub {wm.fkeys_data wm.column_native} {
   , fn.nat_sch				as fn_sch
   , fn.nat_tab				as fn_tab
   , fn.nat_sch || '.' || fn.nat_tab	as fn_obj
+  , tk.conname
   from	wm.fkeys_data		tk
     join		wm.column_native	tn on tn.nat_sch = tk.kst_sch and tn.nat_tab = tk.kst_tab and tn.nat_col = tk.kst_cols[1]
     join		wm.column_native	fn on fn.nat_sch = tk.ksf_sch and fn.nat_tab = tk.ksf_tab and fn.nat_col = tk.ksf_cols[1]
@@ -471,10 +470,8 @@ view wm.fkey_data {} {
     
 # Information about foreign keys to public tables/views
 #-------------------------------------------
-view wm.fkey_pub {wm.fkey_data wm.column_native} {
-  select
-    kd.conname
-  , tn.cnt_sch				as tt_sch
+view wm.fkey_pub {wm.fkey_data wm.column_native} {select
+    tn.cnt_sch				as tt_sch
   , tn.cnt_tab				as tt_tab
   , tn.cnt_sch || '.' || tn.cnt_tab	as tt_obj
   , tn.cnt_col				as tt_col
@@ -492,20 +489,16 @@ view wm.fkey_pub {wm.fkey_data wm.column_native} {
   , fn.nat_col				as fn_col
   , kd.key
   , kd.keys
+  , kd.conname
   , case when exists (select * from wm.column_native where cnt_sch = tn.cnt_sch and cnt_tab = tn.cnt_tab and nat_sch = tn.nat_sch and nat_tab = tn.nat_tab and cnt_col != tn.cnt_col and nat_col = kd.kyt_col) then
         tn.cnt_col
     else
         null
     end						as unikey
-  , coalesce(vt.language, nt.language, 'en')	as language
-  , coalesce(vt.title, nt.title, tn.cnt_col)	as title
-  , coalesce(vt.help, nt.help)			as help
 
-  from	wm.fkey_data	kd			--Fixme: Strip language data out to separate view
+  from	wm.fkey_data	kd
     join		wm.column_native	tn on tn.nat_sch = kd.kyt_sch and tn.nat_tab = kd.kyt_tab and tn.nat_col = kd.kyt_col
     join		wm.column_native	fn on fn.nat_sch = kd.kyf_sch and fn.nat_tab = kd.kyf_tab and fn.nat_col = kd.kyf_col
-    left join		wm.column_text vt	on vt.ct_sch = tn.cnt_sch and vt.ct_tab = tn.cnt_tab and vt.ct_col = tn.cnt_col
-    left join		wm.column_text nt	on nt.ct_sch = tn.nat_sch and nt.ct_tab = tn.nat_tab and nt.ct_col = kd.kyt_col
   where	not kd.kyt_sch in ('pg_catalog','information_schema');
 } -grant public -primary {conname}
     
