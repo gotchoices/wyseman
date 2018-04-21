@@ -72,7 +72,7 @@ proc wmdd::errtext {table code} {
     set idx "error:$table:$code"
     lassign [wmdd::table_parts $table] sch tab
     if {![info exists v($idx)]} {
-        set v($idx) [sql::one "select title,help from wm.error_text where et_sch = '$sch' and et_tab = '$tab' and code = '$code' and language = '$v(lang)'"]
+        set v($idx) [sql::one "select title,help from wm.message_text where et_sch = '$sch' and et_tab = '$tab' and code = '$code' and language = '$v(lang)'"]
     }
     return $v($idx)
 }
