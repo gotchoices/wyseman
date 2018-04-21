@@ -102,7 +102,7 @@ class DB < PG::Connection
   end
 
 # -----------------------------------------------------------------------------
-  def error_text (tab, code)		# Return the text for a specified message
+  def message_text (tab, code)		# Return the text for a specified message
     #Port_me
   end
 
