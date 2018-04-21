@@ -6,7 +6,7 @@ Postgres:  See README.pg
   (mychips).
 
 Ruby postgresql plugin
-  dnf install postgresql-devel redhat-rpm-config
+  dnf install postgresql-devel redhat-rpm-config ruby-devel
   gem install json
   gem install pg		;or
 

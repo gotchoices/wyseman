@@ -137,7 +137,7 @@ this.log.debug("Connected clients: ", wss.clients.size)
 // Attempt a DB query.  If not yet connected, queue the request
 // -------------------------------------------------------------------
   query(...args) {
-this.log.debug("Query:", args)
+this.log.debug("Query:", args[0])
     if (!this.client._connected) {		//If connection not ready, save the command for later
       this.queryQue.push([...args])
 //this.log.debug("  queueing it: ", this.queryQue.length)
