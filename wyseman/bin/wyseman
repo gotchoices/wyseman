@@ -104,7 +104,7 @@ if opts[:sql]					#Generate schema creation SQL on stdout
   }
 
   puts "\n--Data Dictionary:"
-  %w{wm.table_text wm.column_text wm.value_text wm.error_text wm.table_style wm.column_style wm.column_native}.each {|tab|
+  %w{wm.table_text wm.column_text wm.value_text wm.message_text wm.table_style wm.column_style wm.column_native}.each {|tab|
     flds = dbc.one("select array_to_string(array(select col from wm.column_pub where obj = '#{tab}' order by field),',')")[0]
 #printf("flds:%s\n",flds)
     printf("insert into #{tab} (%s) values\n", flds)
