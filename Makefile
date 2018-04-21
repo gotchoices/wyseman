@@ -1,5 +1,5 @@
 LIBNAME=wyseman
-VERSION=0.60
+VERSION=2.0
 LBITS := $(shell getconf LONG_BIT)
 
 #Allow the user to install where he wants

@@ -1,5 +1,5 @@
 2017	Release 2.0
-	Converted main program to a ruby class which can be called from
+	Converted main program to a ruby script which can be called from
 	the command line, or from a running program.  The sql create/drop 
 	code is first loaded into the database in a special schema area
 	and sql queries are used to produce the list of objects to rebuild
