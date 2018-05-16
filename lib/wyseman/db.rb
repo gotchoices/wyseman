@@ -12,18 +12,25 @@ require 'pg'
 
 module Wyseman
 class DB < PG::Connection
-  def initialize (*args)
+  def initialize (opts = {})
+    bootstrap = File.join(File.dirname(__FILE__), '..' , 'bootstrap.sql')
+    schema = opts[:schema] || bootstrap
+    opts.delete(:schema)
+    devel = opts[:devel]
+    opts.delete(:devel)
+    
+#puts "Opts:#{opts} schema:#{schema}"
     begin
-      @lang = 'en'					#Fixme: multi-language
-      super(*args)
+      @lang = 'en'					#Fixme: support for multi-language
+      super(opts)					#Initialize DB
     rescue PG::ConnectionBad				#If can't connect
-      (args[-1] = (oldh = args[-1]).dup)[:dbname] = 'template1'
-      db = PG::Connection.new(*args)			#Connect to template db
-      oldh[:dbname] = db.exec("select current_user;").getvalue(0,0) if !oldh[:dbname]	#Get my PG username if no username specified explicitly
-      db.exec "create database " + qid(oldh[:dbname])	#Create my database
+      (tmpOpts = opts.dup)[:dbname] = 'template1'
+      db = PG::Connection.new(tmpOpts)			#Connect to template db
+      opts[:dbname] ||= db.exec("select current_user;").getvalue(0,0)	#Get my PG username if no username specified explicitly
+#puts " opts:#{opts} tmpOpts:#{tmpOpts}"
+      db.exec "create database " + qid(opts[:dbname])	#Create my database
       db.close
-      args[-1] = oldh
-      super(*args)					#And try reconnecting
+      super(opts)					#And try reconnecting
     end
 
     set_notice_receiver { |res|
@@ -31,10 +38,17 @@ class DB < PG::Connection
     }
       
     begin
-      one("select count(*) from wm.objects;")		#If bootstrap schema doesn't exist
-    rescue PG::UndefinedTable				#create it
-      t(File.open(File.join(File.dirname(__FILE__), '..' , 'bootstrap.sql'),'r').read)
+      release = one("select wm.release();")[0]		#If wyseman schema doesn't exist
+    rescue PG::InvalidSchemaName			#create it
+#puts "Schema file:#{schema}"
+      t(File.open(schema,'r').read)
     end
+    
+    begin
+      one("select max(release) from wm.releases;")	#If development schema doesn't exist
+    rescue PG::UndefinedTable				#create it
+      t(File.open(bootstrap,'r').read)
+    end if devel
     
     @column_data = {}
     @table_data = {}

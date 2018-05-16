@@ -1,29 +1,28 @@
--- Bootstrap the schema with table containing create/drop data about all other objects
+-- Bootstrap the schema with a table containing create/drop data about all other objects
 -- Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
 -- TODO:
--- X- How to prune the dependencies for objects that can be replaced (functions/views)
--- X- Make routine:
--- X-  optional drop and/or create
--- X-  drop in reverse depth order
--- X-  create in depth order
--- X-  optional, but default, preserve data in tables
--- X- Is there a way to dump tables (like pg_dump) direct from database
--- X- Implement release table
--- X- Move dependencies to a view/virtual table
--- X- Keep grants in object table with create sql
--- X- Finish wm.grant for new way
--- X- Items must track which module,release they are a part of
 -- X- Find orphaned objects and delete them
 -- X- When deleting an item from objects, delete the actual object too
--- - Is there a way to create /var/tmp/wyseman automatically if it doesn't exist?
--- - Bug: orphan check only works if at least one object still remains in the source file
--- - 
+-- X- Is there a way to create /var/tmp/wyseman automatically if it doesn't exist?
+-- - Test: Releases > 1 function correctly
 -- - Test: Can't change items part of a prior release
+-- - Bug: orphan check only works if at least one object still remains in the source file
 -- - If table columns have changed, apply alter script before drop/create of table
--- - Function to output sql for a module, release
+-- - Function to output sql for a module, or a release
 -- - 
 
-create schema wm;		-- Holds all the wyseman objects
+create schema if not exists wm;	-- Holds all the wyseman objects (common to development and distribution modes)
+
+-- Create a permission group (role) if it doesn't already exist (common to development and distribution modes)
+-- ----------------------------------------------------------------------------
+create or replace function wm.create_group(grp varchar) returns boolean language plpgsql as $$
+  begin
+    if not exists (select rolname from pg_roles where rolname = grp) then
+      execute 'create role ' || grp || ';'; return true;
+    end if;
+    return false;
+  end;
+$$;
 
 -- Track official module releases
 -- Whatever is max(release) is the current, working copy
@@ -36,10 +35,20 @@ create table wm.releases (
 );
 insert into wm.releases (release) values (1);
 
--- Latest (working) release number
+-- Latest (working) release number (exists development and distribution modes)
+-- A version of this exists in the distribution mode schema which returns a constant indicating the current version
 -- ----------------------------------------------------------------------------
 create or replace function wm.release() returns int stable language sql as $$
   select coalesce(max(release),1) from wm.releases
+$$;
+
+-- Untrusted language, and function to use it to create a working folder for backup/restore
+-- ----------------------------------------------------------------------------
+create language pltclu;
+create function wm.workdir() returns varchar stable language pltclu as $$
+  set path {/var/tmp/wyseman}
+  if {![file exists $path]} {file mkdir $path}
+  return $path
 $$;
 
 -- Contains an entry for each database object we are creating
@@ -255,7 +264,7 @@ create or replace function wm.make(
     objs varchar[]		-- array of objects to act on
   , drp boolean default true	-- drop objects in the specified branch
   , crt boolean default true	-- create objects in the specified branch
-  , wrk text default '/var/tmp/wyseman'	-- server folder to store temp backup files in
+--  , wrk text default '/var/tmp/wyseman'	-- server folder to store temp backup files in
 ) returns int language plpgsql as $$
   declare
     s		varchar;		-- temporary string
@@ -297,7 +306,7 @@ raise notice 'Drop:% :%:', trec.depth, trec.object;
         if trec.obj_typ = 'table' and cnt > 0 then		-- Attempt to preserve existing table data
           collist = array_to_string(array(select column_name::text from information_schema.columns where table_schema || '.' || table_name = trec.obj_nam order by ordinal_position),',');
 -- raise notice 'collist:%', collist;
-          s = wrk || '/' || trec.obj_nam || '.dump';
+          s = wm.workdir() || '/' || trec.obj_nam || '.dump';
           execute 'copy ' || trec.obj_nam || '(' || collist || ') to ''' || s || '''';
           get diagnostics cnt = ROW_COUNT;
 -- raise notice 'Count:%', cnt;
@@ -330,8 +339,8 @@ raise notice 'Create:% :%:', trec.depth, trec.object;
           glev = garr[2] || '_' || garr[3];
           if garr[2] = 'public' then
             glev = garr[2];
-          elsif not exists (select rolname from pg_roles where rolname = glev) then
-            execute 'create role ' || glev || ';';
+          else
+            perform wm.create_group(glev);
           end if;
           otype = trec.obj_typ; if otype = 'view' then otype = 'table'; end if;
           execute 'grant ' || garr[4] || ' on ' || otype || ' ' || trec.obj_nam || ' to ' || glev || ';'; 

@@ -3,13 +3,17 @@
 #TODO:
 #X- Implement initialization files .wmi
 #X- Output SQL build files for app-level database generation
+#X- Create version part of bootstrap schema, no matter what (even in non-devel)
+#X- schema wm, wm.release, and wm.create_group
 #- How to input/update table migration scripts (such as changing column names, adding or deleting columns)
 #- Manage releases:
-#-   Move SQL output code to a separate module
-#-   Generate a version code when SQL build code is generated
+#-   Test: versions > 1 function correctly
+#-   Move SQL output code to a separate module?
+#-X   Generate a version function when SQL build code is generated
 #-   Can generate SQL for any past version still in the database
 #-   Can generate sql to upgrade existing database to a specified release specification
-#- Dump selected, or all tables
+#-   Can dump wm.objects and restore it to a different site for version management there
+#- Dump selected, or all tables to text/backup files
 #- Restore selected or all tables
 #- List database objects in dependency/tree order
 #- 
@@ -42,16 +46,17 @@ OptionParser.new do |op|
 end.parse!
 #p 'Opts:',opts; p 'Args:',ARGV			#Debug
 
-#Fixme: turn back on when dump/restore implemented
+#Fixme: turn back on when dump/restore implemented, if we need a local work space
 #FileUtils::mkdir_p opts[:work]			#Make sure working directory exists
 
-dbc = Wyseman::DB.new(dbname:opts[:dbname], host:opts[:host])	#Connect to postgres, will make sure bootstrap/ddict exists
+dbc = Wyseman::DB.new(dbname:opts[:dbname], host:opts[:host], devel:true)	#Connect to postgres; will make sure bootstrap/ddict exists
+
 post_sql = ''
 if ARGV.length > 0
-  wm = Wyseman::Session.new(dbc)		#Initialize the parser
+  wm = Wyseman::Session.new(dbc)		#Initialize the schema parser
   ARGV.each {|f| 				#Parse the specified input files
     exit if !(sql = wm.parse(f))
-    post_sql << sql				#accumulate for later
+    post_sql << sql				#accumulate sql commands for later
   }
   if opts[:post]				#And do post-cleanup
     wm.check(opts[:prune])
@@ -69,24 +74,28 @@ end
 
 #Instantiate specified, or default objects in the database, with optional pre-drop
 if opts[:make] 
-  if dbc.one("select wm.make(#{brval},#{opts[:drop]},true);")[0].to_i > 0	#Make objects
-    dbc.x("select wm.init_dictionary();")				#dictionary
+  if dbc.one("select wm.make(#{brval},#{opts[:drop]},true);")[0].to_i > 0	#Make specified objects
+    dbc.x("select wm.init_dictionary();")				#Re-initialize dictionary
   end
 end
 
 # -----------------------------------------------------------------------------
 if opts[:sql]					#Generate schema creation SQL on stdout
-  puts "--Schema Creation SQL:\nbegin;\ncreate schema wm;"
-
-  puts %Q{create or replace function wm.create_group(grp varchar) returns boolean language plpgsql as $$
+  schema_sql = "--Schema Creation SQL:\n"
+  schema_sql << "create schema if not exists wm;\n"
+  schema_sql << %Q{create or replace function wm.create_group(grp varchar) returns boolean language plpgsql as $$
   begin\n    if not exists (select rolname from pg_roles where rolname = grp) then
       execute 'create role ' || grp || ';'; return true;
-    end if;\n    return false;\n  end;\n$$;}
+    end if;\n    return false;\n  end;\n$$;\n}
+
+  version = dbc.one("select wm.release();")[0]
+  schema_sql << %Q{create or replace function wm.release() returns int stable language plpgsql as $$
+  begin return #{version}; end;\n$$;\n}
   
   roles = []					#Keep track of roles we have created
   dbc.x("select obj_nam,crt_sql,grants from wm.objects_v_depth where release = wm.release() order by depth,obj_nam").values.each {|row|
-#    puts "--Create #{row[0]}:"
-    puts row[1]
+#    schema_sql << "--Create #{row[0]}:\n"
+     schema_sql << row[1] + "\n"
     CSV.parse(row[2].delete("{}")).each {|row|		#For each grant record
       row.each {|grec|
 #printf("Grec:%s\n", grec)
@@ -95,19 +104,19 @@ if opts[:sql]					#Generate schema creation SQL on stdout
         perm = (mod == 'public') ? mod : mod.to_s + '_' + level.to_s
         otyp = (otyp == 'view') ? 'table' : otyp
         if !roles.include?(perm) && perm != 'public'
-          puts "select wm.create_group('#{perm}');"
+          schema_sql << "select wm.create_group('#{perm}');\n"
           roles << perm 
         end
-        puts "grant #{priv} on #{otyp} #{onam} to #{perm};"
+        schema_sql << "grant #{priv} on #{otyp} #{onam} to #{perm};\n"
       }
     }
   }
 
-  puts "\n--Data Dictionary:"
+  schema_sql << "\n--Data Dictionary:\n"
   %w{wm.table_text wm.column_text wm.value_text wm.message_text wm.table_style wm.column_style wm.column_native}.each {|tab|
     flds = dbc.one("select array_to_string(array(select col from wm.column_pub where obj = '#{tab}' order by field),',')")[0]
 #printf("flds:%s\n",flds)
-    printf("insert into #{tab} (%s) values\n", flds)
+    schema_sql << "insert into #{tab} (#{flds}) values\n"
     irows = []
     res = dbc.x("select #{flds} from #{tab}")
     for i in 0..(res.ntuples-1)
@@ -120,15 +129,15 @@ if opts[:sql]					#Generate schema creation SQL on stdout
       }
       irows << ("(" + icols.join(',') + ")")
     end
-    puts "  " + irows.join(",\n  ") + ";\n\n"
+    schema_sql << "  " + irows.join(",\n  ") + ";\n\n"
   }
-end
+  puts schema_sql
+end		#opts[:sql]
 
 if post_sql != ''				#Initialization of table data
   if opts[:init] || opts[:sql]
     puts "--Initialization SQL:"
     puts post_sql				#See initialization code on stdout
-    puts "commit;"
   else
     STDERR.puts "Running Initialization SQL"
     dbc.x(post_sql)
