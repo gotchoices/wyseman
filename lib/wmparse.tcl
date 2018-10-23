@@ -277,7 +277,7 @@ proc wmparse::view {args} {
 
     if {[set nats [xswitchs native args]] != {}} {
         foreach nat $nats {			;#can specify multiple native records
-#puts "Nat:$nat"
+#puts "Native for $name: $nat"
             lappend ob($name.cnats) [macsub $nat]
         }
     }

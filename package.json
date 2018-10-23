@@ -15,7 +15,7 @@
   "author": "Kyle Bateman",
   "license": "GPL-3.0",
   "dependencies": {
-    "pg": "^7.4.1",
+    "pg": "^7.5.0",
     "pg-native": "^2.2.0"
   },
   "devDependencies": {}
