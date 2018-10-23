@@ -114,7 +114,7 @@ create or replace function wm.grant(
       if not cln then raise notice 'Grant: % multiply defined on object:%:%', pstr, otyp, onam; end if;
       return false;
     else
-      update wm.objects set clean = false, grants = grlist || pstr where obj_typ = otyp and obj_nam = onam and obj_ver = 0;
+      update wm.objects set clean = false, grants = grlist || pstr where obj_typ = quote_nullable(otyp) and obj_nam = quote_nullable(onam) and obj_ver = 0;
     end if;
     return true;
   end;
@@ -135,7 +135,7 @@ create or replace view wm.depends_v as
  	join	unnest(o.ndeps)	d	on true
         join    search_deps     dr	on dr.object = d and dr.release = r.release	-- iterate through dependencies
         where			not cycle
-  ) select *, path || object as fpath from search_deps;
+  ) select object,obj_typ as od_typ, obj_nam as od_nam, depend, release as od_release, depth, path, cycle, path || object as fpath from search_deps;
 
 -- View of objects and each release they belong to
 -- ----------------------------------------------------------------------------
@@ -238,7 +238,7 @@ $$;
 create or replace view wm.objects_v_depth as
   select o.*, od.depth
   from		wm.objects_v	o
-  join		(select obj_typ, obj_nam, release, max(depth) as depth from wm.depends_v group by 1,2,3) od on od.obj_typ = o.obj_typ and od.obj_nam = o.obj_nam and od.release = o.release
+  join		(select od_typ, od_nam, od_release, max(depth) as depth from wm.depends_v group by 1,2,3) od on od.od_typ = o.obj_typ and od.od_nam = o.obj_nam and od.od_release = o.release
   order by	depth;
 
 -- Attempt to replace a view or function
@@ -286,7 +286,7 @@ create or replace function wm.make(
     end if;
   
     foreach s in array objs loop	-- for each specified object, expand to dependent objects
-      objlist = objlist || array(select distinct object from wm.depends_v where s = any(fpath) and release = wm.release());
+      objlist = objlist || array(select distinct object from wm.depends_v where s = any(fpath) and od_release = wm.release());
     end loop;
 -- raise notice 'objlist:%', objlist;
     create temporary table _table_info (obj_nam varchar primary key, columns varchar, fname varchar, rows int);
