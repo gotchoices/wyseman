@@ -27,7 +27,7 @@ class DB < PG::Connection
       db = PG::Connection.new(tmpOpts)			#Connect to template db
       opts[:dbname] ||= db.exec("select current_user;").getvalue(0,0)	#Get my PG username if no username specified explicitly
 #puts " opts:#{opts} tmpOpts:#{tmpOpts}"
-      db.exec "create database " + qid(opts[:dbname])	#Create my database
+      db.exec "create database " + quote_ident(opts[:dbname])	#Create my database
       db.close
       super(opts)					#And try reconnecting
     end
@@ -73,31 +73,33 @@ class DB < PG::Connection
       escape_string (str)
   end
 
+# Depricated
 # -----------------------------------------------------------------------------
   def qid(str)						#Short-hand for quoting identifier
       quote_ident (str)
   end
 
-# Deprecated
+# Depricated
+# Should use parameterized queries instead.  Only used for building schema file now in wyseman
 # -----------------------------------------------------------------------------
-#  def quote(tab, col, val, errchk = false)		#Return a value with single quote, if 
-#    return val if col == 'oid'
-##printf("tab:%s col:%s val:%s\n", tab, col, val)
-#    tp = (cdat = column(tab, col))['type']
-##printf("  cdat:%s\n", cdat)
-#    return 'null' if val == '' && cdat['nonull'] != 't'
-#    if %w{numeric int int4 int8 float float4 float8}.include?(tp)
-#      val = val.gsub(/[$,]/,'')
-#      if val == ''
-#        raise "Illegal blank value for table:#{tab} column:#{col}" if errchk
-#        return 'null'
-#      end
-#      return val
-#    elsif tp[0] == '_'
-#      return "'#{esc(val)}'"
-#    end
-#    return "'" + (escape_string (val)) + "'"
-#  end
+  def quote(tab, col, val, errchk = false)		#Return a value with single quote, if 
+    return val if col == 'oid'
+#printf("tab:%s col:%s val:%s\n", tab, col, val)
+    tp = (cdat = column(tab, col))['type']
+#printf("  cdat:%s\n", cdat)
+    return 'null' if val == '' && cdat['nonull'] != 't'
+    if %w{numeric int int4 int8 float float4 float8}.include?(tp)
+      val = val.gsub(/[$,]/,'')
+      if val == ''
+        raise "Illegal blank value for table:#{tab} column:#{col}" if errchk
+        return 'null'
+      end
+      return val
+    elsif tp[0] == '_'
+      return "'#{esc(val)}'"
+    end
+    return "'" + (escape_string (val)) + "'"
+  end
   
 # -----------------------------------------------------------------------------
   def table_split(tab)				#Split schema, table into array
@@ -226,17 +228,17 @@ class DB < PG::Connection
 printf("Insert tab:%s data:%s\n", tab, data)
     parms = []
     i = parms.length + 1				#parameter counter
-    fields = [], values = []
+    fields = []; values = []
     data.each_pair { |key, val|
-        fields << self.qid(key)
+        fields << self.quote_ident(key)
         values << "$" + i.to_s; i += 1
         parms << val
     }
     sql = "insert into #{tab.split('.').map{|n| quote_ident(n)}.join('.')} (#{fields.join(',')}) values (#{values.join(',')}) returning *;"
-printf "Test_me:%s :%s\n", sql, res[:parms]
-#   res = exec_params(sql, parms)
-#   raise 'Error inserting #{sql}' if res.ntuples != 1
-#   res[0]
+#printf "Test_me:%s :%s\n", sql, parms
+   res = exec_params(sql, parms)
+   raise 'Error inserting #{sql}' if res.ntuples != 1
+   res[0]
   end
 
 # -----------------------------------------------------------------------------

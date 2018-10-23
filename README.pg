@@ -1,5 +1,5 @@
 -------------------------------------------------------------------------------
-Current setup procedure for postgres out of the box on Fedora
+Current setup procedure for postgres out of the box on Fedora (Oct 2018)
 
 - dnf install postgresql postgresql-server rubygem-pg
 
@@ -17,7 +17,7 @@ Current setup procedure for postgres out of the box on Fedora
 - As postgres, create your database admin user(s):
 	su -l postgres -c 'createuser -d -s -r <dba_username>'
 
-- To run wysegi and other tcl stuff:
+- To run legacy wysegi and other legacy tcl stuff:
 	dnf install tcl-pgtcl
 
 -------------------------------------------------------------------------------
