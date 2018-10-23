@@ -103,6 +103,7 @@ view wm.table_data {wm.column_data} {select
   , cl.relkind				as tab_kind
   , cl.relhaspkey			as has_pkey
   , cl.relnatts				as cols
+  , ns.nspname in ('pg_catalog','information_schema') as system
   , kd.pkey
   from		pg_class	cl
   join		pg_namespace	ns	on cl.relnamespace = ns.oid
@@ -120,6 +121,7 @@ view wm.table_pub {wm.table_data wm.table_text} {select
   , td.has_pkey
   , td.pkey
   , td.cols
+  , td.system
   , tt.language
   , tt.title
   , tt.help
@@ -148,7 +150,7 @@ function {wm.default_native()} {wm.column_native wm.column_data wm.view_column_u
     begin
         delete from wm.column_native;
         for crec in select * from wm.column_data where cdt_col != '_oid' and field  >= 0 and cdt_sch not in ('pg_catalog','information_schema') loop
--- raise notice ' Col:%', crec.cdt_col;
+--raise notice ' Col:%', crec.cdt_col;
             sname = crec.cdt_sch;
             tname = crec.cdt_tab;
             loop
@@ -157,7 +159,8 @@ function {wm.default_native()} {wm.column_native wm.column_data wm.view_column_u
                 sname = nrec.table_schema;
                 tname = nrec.table_name;
             end loop;
-            insert into wm.column_native (cnt_sch, cnt_tab, cnt_col, nat_sch, nat_tab, nat_col, pkey) values (crec.cdt_sch, crec.cdt_tab, crec.cdt_col, sname, tname, crec.cdt_col, crec.is_pkey);
+            insert into wm.column_native (cnt_sch, cnt_tab, cnt_col, nat_sch, nat_tab, nat_col, pkey, nat_exp) values (crec.cdt_sch, crec.cdt_tab, crec.cdt_col, sname, tname, crec.cdt_col, crec.is_pkey, false);
+            cnt = cnt + 1;
         end loop;
         return cnt;
     end;
@@ -183,12 +186,12 @@ function {wm.init_dictionary()} {wm.default_native() wm.column_native wm.column_
 --raise notice 'Cnat: %:%: %', trec.obj_typ, trec.obj_nam, s;
           oarr = string_to_array(trec.obj_nam,'.');	-- break object into schema, name
           narr = string_to_array(tarr[3],'.');		-- break native object into schema, name
-          update wm.column_native set nat_sch = 'narr[1]', nat_tab = 'narr[2]', nat_col = 'tarr[4]', nat_exp = 't' where cnt_sch = 'oarr[1]' and cnt_tab = 'oarr[2]' and cnt_col = 'tarr[2]';
+          update wm.column_native set nat_sch = narr[1], nat_tab = narr[2], nat_col = tarr[4], nat_exp = true where cnt_sch = oarr[1] and cnt_tab = oarr[2] and cnt_col = tarr[2];
         end loop;
       end loop;
 
       for trec in select cdt_sch,cdt_tab,cdt_col from wm.column_data where is_pkey and cdt_col != '_oid' and field >= 0 order by 1,2 loop
-        update wm.column_native set pkey = 't' where cnt_sch = trec.cdt_sch and cnt_tab = trec.cdt_tab and cnt_col = trec.cdt_col;
+        update wm.column_native set pkey = true where cnt_sch = trec.cdt_sch and cnt_tab = trec.cdt_tab and cnt_col = trec.cdt_col;
       end loop;
       
       for trec in select * from wm.objects where obj_typ = 'view' loop
@@ -334,7 +337,7 @@ view wm.column_lang {wm.column_data wm.column_text wm.value_text} {select
 
     where	cd.cdt_col != '_oid'
     and		cd.field >= 0;
-} -primary {sch tab col} -grant public
+} -primary {sch tab col} -grant public -native {{wm.column_text title help language}}
 
 # Meta-data about tables/views, for public access
 #-------------------------------------------
@@ -344,12 +347,13 @@ view wm.table_meta {wm.table_data wm.column_meta} {select
   , td.td_sch || '.' || td.td_tab	as obj
   , td.tab_kind
   , td.has_pkey
+  , td.system
   , to_jsonb(td.pkey)			as pkey
   , td.cols
   , array (select array[sw_name, sw_value] from wm.table_style ts where ts.ts_sch = td.td_sch and ts.ts_tab = td.td_tab order by sw_name) as styles
   , (select array_agg(to_jsonb(d)) from (select col, field, type, nonull, length, pkey, to_jsonb(values) as values, jsonb_object(styles) as styles from wm.column_meta cm where cm.sch = td.td_sch and cm.tab = td.td_tab) d) as columns
   from		wm.table_data		td;
-} -primary {sch tab} -grant public
+} -primary {sch tab} -grant public -native {{wm.table_data pkey}}
 
 # Unified information about non-system tables (legacy for TCL, mingles metadata and language data)
 # Language text about tables/views, for public access
@@ -365,7 +369,7 @@ view wm.table_lang {wm.table_data wm.table_text wm.column_lang wm.message_text} 
   , (select array_agg(to_jsonb(d)) from (select col, title, help, values from wm.column_lang cl where cl.sch = td.td_sch and cl.tab = td.td_tab and cl.language = tt.language) d) as columns
   from		wm.table_data		td
   left join	wm.table_text		tt on td.td_sch = tt.tt_sch and td.td_tab = tt.tt_tab;
-} -primary {sch tab language} -grant public
+} -primary {sch tab language} -grant public -native {{wm.table_text title help language}}
 
 # For initializing a record to default values
 #-------------------------------------------
@@ -511,7 +515,8 @@ view wm.role_members {} {
     join        	pg_authid       me on me.oid = am.member;
 } -primary {role member}
 
-# Show view columns that have ambiguous native tables (should ideally not be any)
+# Show view columns that have ambiguous native tables
+# There should ideally not be any records, at least where spec = false (no explicit native definition)
 #-------------------------------------------
 view wm.column_ambig {wm.view_column_usage wm.column_native} {select
     cu.view_schema	as sch
