@@ -341,7 +341,7 @@ view wm.column_lang {wm.column_data wm.column_text wm.value_text} {select
 
 # Meta-data about tables/views, for public access
 #-------------------------------------------
-view wm.table_meta {wm.table_data wm.column_meta} {select
+view wm.table_meta {wm.table_data wm.column_meta wm.fkeys_data} {select
     td.td_sch				as sch
   , td.td_tab				as tab
   , td.td_sch || '.' || td.td_tab	as obj
@@ -352,6 +352,7 @@ view wm.table_meta {wm.table_data wm.column_meta} {select
   , td.cols
   , array (select array[sw_name, sw_value] from wm.table_style ts where ts.ts_sch = td.td_sch and ts.ts_tab = td.td_tab order by sw_name) as styles
   , (select array_agg(to_jsonb(d)) from (select col, field, type, nonull, length, pkey, to_jsonb(values) as values, jsonb_object(styles) as styles from wm.column_meta cm where cm.sch = td.td_sch and cm.tab = td.td_tab) d) as columns
+  , (select array_agg(to_jsonb(d)) from (select ksf_sch || '.' || ksf_tab as "table", to_jsonb(kst_cols) as columns from wm.fkeys_data ks where ks.kst_sch = td.td_sch and ks.kst_tab = td.td_tab) d) as fkeys
   from		wm.table_data		td;
 } -primary {sch tab} -grant public -native {{wm.table_data pkey}}
 
