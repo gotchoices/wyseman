@@ -369,10 +369,11 @@ proc wmparse::trigger {args} {
         if {$dep == {}} {error "Failed to find trigger table dependency: $name"; return}
         set tab {}
     }
-    if {![regexp -nocase {procedure ([^\n (]*)\(.*\)} $create junk fnc]} {
+    if {![regexp -nocase {procedure ([^\n (]*)\((.*)\)} $create junk fnc parg]} {
         if {$dep == {}} {error "Failed to find trigger function dependency: $name"; return}
         set fnc {}
     }
+#puts "FNC:$fnc ARGS:$parg"
     if {$tab != {}} {lappend dep "$tab"}
     if {$fnc != {}} {lappend dep "${fnc}()"}
 #puts "DEP:$dep"
