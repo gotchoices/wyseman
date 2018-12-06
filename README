@@ -6,8 +6,8 @@ also provides run-time access to the data dictionary for databases it manages.
 
 Wyseman was originally implemented entirely in Tcl/Tk.  More recently,
 the command line app was ported to ruby.  However, the configuration
-code (i.e. the way you describe your database schema) remains in Tcl, which 
-is a good fit for the long term.
+code (i.e. the way you describe your database sql and schema objects) remains 
+in Tcl, which is a good fit for the long term.
 
 The run-time code has been partially ported to ruby--at least enough to
 work for basic purposes.  More work could be done here as demand arises.
@@ -20,9 +20,3 @@ See README.pg for notes on installing/interfacing with PostgreSQL.
 
 For now, you may have to consult the source code for command line options
 for the ruby script.
-
-This code has been ported primarily for the purpose of supporting the
-MyCHIPs project (github.com/gotchoices/mychips).  So improvements are mostly
-being added responsive to those needs.  If you would like to use wyseman and
-need other features/fixes, please contact the author (particularly if you 
-are willing to help).

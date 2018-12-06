@@ -2,8 +2,11 @@ Wyseman TODO
 X- Implement preferred display columns per view
 X- Implement preferred display order per view
 - Implement custom (user defined) control layer
+- Further develop user-defined control layer
 - Allow user defined hooks on standard controls
+- Separate run-time scripts to separate wyclif module (Control Layer InterFace)
 - Implement table modification microscripts where drop/create won't do
 - Test/validate schema release versioning features
+- Tie single digit release number to associated semver release ID
 - Finish porting ruby run-time
 - 

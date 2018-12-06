@@ -1,9 +1,10 @@
 {
   "name": "wyseman",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Javascript API to wyseman PostgreSQL Schema Manager",
   "main": "lib/index.js",
   "scripts": {
+    "tclpkg": "wmmkpkg wyseman 0.50 tcltk",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -13,10 +14,14 @@
     "manager"
   ],
   "author": "Kyle Bateman",
-  "license": "GPL-3.0",
+  "license": "MIT",
+  "bin": {
+    "erd": "bin/erd",
+    "wyseman": "bin/wyseman",
+    "wysegi": "bin/wysegi"
+  },
   "dependencies": {
-    "pg": "^7.5.0",
-    "pg-native": "^2.2.0"
+    "pg": "^7.5.0"
   },
   "devDependencies": {}
 }

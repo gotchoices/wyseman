@@ -1,29 +1,41 @@
-2017	Release 2.0
-	Converted main program to a ruby script which can be called from
-	the command line, or from a running program.  The sql create/drop 
-	code is first loaded into the database in a special schema area
-	and sql queries are used to produce the list of objects to rebuild
-	given a certain drop/create sequence.
+Change Log:
+
+1.0.0	2018-Dec	Release 6: Node.js 1.0.0
+	- Run-time support added for javascript programs.
+	- Enhancements to support more robust Wylib data dictionary
+	- Initial support for a user-defined control layer
+	- Depending on the view, apps can access reports, previews, etc.
+	- License changed from GPL-3 to MIT
+	
+0.1.0	2017	Release 5: Resurrection
+	Ported main command line program to ruby.  Package is a gem.
+	
+	Also, after parsing the text files, the sql create/drop code is now 
+	loaded into the database in a special schema area and sql queries 
+	are used to produce the list of objects to rebuild given a certain 
+	drop/create sequence.
 	
 	There is still a TCL run-time library "wyseman" that can be called
-	from TCL apps to access the data dictionary.  This is how wysegi
-	still works.  But when managing schema changes, TCL is now used
-	only to parse the schema description files.  Ruby is the glue to
-	hold the app together.  But most of the heavy lifting occurs right
-	in Postgresql.  For example, all schema items get dropped/rebuilt
+	from TCL apps to access the data dictionary.  This is how the 
+	bin/wysegi app still works.  But there is now also a ruby run-time.
+	
+	But when managing schema changes, TCL is now used only to parse the 
+	schema description files.  Ruby is the glue that holds the app 
+	together.  And most of the heavy lifting occurs right inside 
+	Postgresql.  For example, all schema items get dropped/rebuilt
 	in plpgsql so they are fully atomic.  If your table restore fails,
 	the drop gets rolled back too!
 
-2007?	Release 4 (numbered 0.40)
+0.40	2007?	Release 4:
         Changed to allow objects to be created in postgres namespaces
         (schemas).  Many changes were made to the wyseman system catalog
         tables and columns.  The interface for user programs should have
         remained largely the same.
 
-2006?	Release 3	
+0.33?	2006?	Release 3	
         Many bug fixes, many feature additions
 
-2005?	Release 2	
+0.32?	2005?	Release 2	
 	This release is updated for use with Postgres 8.1.0 which changed
 	fundamentally the way users and groups exist in the database.
 	Users and groups (roles) are now stored in the same table (pg_roles).
@@ -49,4 +61,4 @@
 	initialize the sequences to their proper values.  This is shown in
 	the sample schema as "make sequence".
 
-2005?	Initial open-source release of version 0.30
+0.30	2004?	Initial open-source release of version 0.30

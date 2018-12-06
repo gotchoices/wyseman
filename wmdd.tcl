@@ -1,6 +1,6 @@
 #Routines for applications to access the wyseman data dictionary
 #---------------------------------------
-#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
+#Copyright WyattERP.org See LICENSE in the root of this package
 
 #TODO:
 #X- Access a user variable which controls language

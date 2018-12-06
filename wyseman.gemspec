@@ -1,17 +1,16 @@
 Gem::Specification.new do |s|
   s.name        = 'wyseman'
-  s.version     = '0.5'
-  s.date        = '2017-02-08'
+  s.version     = '1.0.0'
+  s.date        = '2018-12-06'
   s.summary     = "WyattERP Schema Manager"
   s.description = "An application for managing an SQL schema in PostgreSQL"
   s.authors     = ["Kyle Bateman"]
   s.email       = ["info@wyatterp.org"]
   s.platform    = Gem::Platform::RUBY
   s.files       = [
-	"Copyright",
-	"License",
+	"LICENSE",
 	"README",
-	"Release",
+	"Releases",
 	"lib/wyseman.rb",
 	"lib/bootstrap.sql",
 	"lib/run_time.wmd",
@@ -20,6 +19,7 @@ Gem::Specification.new do |s|
 	"lib/wmparse.tcl",
 	"lib/wylib.tcl",
 	"lib/wyseman/db.rb",
+	"bin/erd",
 	"bin/wyseman",
 	"bin/wysegi.wish",
 	"bin/wysegi",
@@ -34,5 +34,5 @@ Gem::Specification.new do |s|
   s.homepage    = 'http://wyatterp.org/wyseman'
   s.requirements << 'Postgresql'
   s.requirements << 'Tcl/Tk, Tcl-PG installed if you want to run wysegi'
-  s.license       = 'GPL-3.0'
+  s.license       = 'MIT'
 end
