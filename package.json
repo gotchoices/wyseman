@@ -15,6 +15,7 @@
   ],
   "author": "Kyle Bateman",
   "license": "MIT",
+  "homepage": "https://github.com/gotchoices/wyseman",
   "bin": {
     "erd": "bin/erd",
     "wyseman": "bin/wyseman",
