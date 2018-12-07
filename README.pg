@@ -1,4 +1,3 @@
--------------------------------------------------------------------------------
 Current setup procedure for postgres out of the box on Fedora (Oct 2018)
 
 - dnf install postgresql postgresql-server rubygem-pg
@@ -21,7 +20,8 @@ Current setup procedure for postgres out of the box on Fedora (Oct 2018)
 	dnf install tcl-pgtcl
 
 -------------------------------------------------------------------------------
-Older Installation notes for source installation of postgres 8.2 on Fedora 4:
+Ancient Installation Notes:
+(Source installation of postgres 8.2 on Fedora 4:)
 
 0) grab the latest sources for postgres and pgtcl and save them in /tmp
 http://www.postgresql.org/ftp/source/
@@ -46,7 +46,6 @@ As root:
 	export MANPATH=$MANPATH:/usr/local/pgsql/man
 	export PGLIB=/usr/local/pgsql/lib
 	export PGDATA=/usr/local/pgsql/data
-
 
 5) build postgres from source
 	cd /usr/src
