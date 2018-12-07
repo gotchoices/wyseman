@@ -1,7 +1,7 @@
 {
   "name": "wyseman",
   "version": "1.0.0",
-  "description": "Javascript API to wyseman PostgreSQL Schema Manager",
+  "description": "PostgreSQL Schema Manager with Javascript, Ruby, TCL API",
   "main": "lib/index.js",
   "scripts": {
     "tclpkg": "wmmkpkg wyseman 0.50 tcltk",
@@ -10,8 +10,12 @@
   "keywords": [
     "wyseman",
     "postscript",
+    "postgresql",
+    "database",
+    "javascript",
     "schema",
     "manager"
+    "erp"
   ],
   "author": "Kyle Bateman",
   "license": "MIT",
