@@ -331,9 +331,10 @@ view wm.column_lang {wm.column_data wm.column_text wm.value_text} {select
   , coalesce(ct.language, nt.language, 'en')	as language
   , coalesce(ct.title, nt.title, cd.cdt_col)	as title
   , coalesce(ct.help, nt.help)			as help
+  , cd.cdt_sch in ('pg_catalog','information_schema') as system
   from		wm.column_data cd
     left join	wm.column_text nt	on nt.ct_sch = cd.nat_sch and nt.ct_tab = cd.nat_tab and nt.ct_col = cd.nat_col
-    left join	wm.column_text ct	on ct.ct_sch = cd.cdt_sch and ct.ct_tab = cd.cdt_tab and ct.ct_col = cd.cdt_col and ct.language = nt.language
+    left join	wm.column_text ct	on ct.ct_sch = cd.cdt_sch and ct.ct_tab = cd.cdt_tab and ct.ct_col = cd.cdt_col 	--(No!) and ct.language = nt.language
 
     where	cd.cdt_col != '_oid'
     and		cd.field >= 0;
