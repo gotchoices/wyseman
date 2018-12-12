@@ -225,7 +225,7 @@ class DB < PG::Connection
 
 # -----------------------------------------------------------------------------
   def doInsert(tab, data)		#Insert a record contained in a hash
-printf("Insert tab:%s data:%s\n", tab, data)
+#printf("Insert tab:%s data:%s\n", tab, data)
     parms = []
     i = parms.length + 1				#parameter counter
     fields = []; values = []
@@ -251,7 +251,7 @@ printf("Insert tab:%s data:%s\n", tab, data)
     raise 'Illegal where clause' if !where
     wwhere = "where " + where if where != ''
     sql = "update #{tab.split('.').map{|n| quote_ident(n)}.join('.')} set #{setems.join(',')} #{wwhere};"
-printf "Test_me:%s :%s\n", sql, res[:parms]
+#printf "Test_me:%s :%s\n", sql, res[:parms]
     exec_params(sql, res[:parms])
   end
 
@@ -262,7 +262,7 @@ printf "Test_me:%s :%s\n", sql, res[:parms]
     wh = buildWhere(where, res)
     raise 'unbounded delete' if res[:parms].length <= 0
     sql = "delete from #{tab.split('.').map{|n| quote_ident(n)}.join('.')} where #{wh};"
-printf "Test_me:%s :%s\n", sql, res[:parms]
+#printf "Test_me:%s :%s\n", sql, res[:parms]
     exec_params(sql, res[:parms])
   end
 

@@ -1,0 +1,34 @@
+#!/bin/env node
+//Make a schema file in this directory, from the bare wyselib schema components.
+//It is needed in order to build the DB used in the mocha tests.
+//If you use the same DB name as the mocha test uses, and don't drop the DB (at the end),
+//You can check for undocumented columns in the bootstrap schema.
+//Otherwise, everything else will get checked (normally plenty good)
+
+const DatabaseName = "wysemanSchemaDB"			//Use a different database name
+//const { DatabaseName } = require('./settings')	//Use the same one as the mocha tests
+
+const { execSync } = require('child_process')
+const fs = require('fs')
+const path = require('path')
+const wyselib = path.join('..', 'node_modules', 'wyselib', 'schema')
+
+var cmd, output
+cmd = 'wyseman --dbname=' + DatabaseName + ' ' + path.join(wyselib, '*.wms') + ' ' + path.join(wyselib, 'base', '*.wms')
+output = execSync(cmd)
+console.log("Building objects:", cmd)
+
+cmd = 'wyseman --dbname=' + DatabaseName + ' ' + path.join(wyselib, '*.wmt') + ' ' + path.join(wyselib, 'base', '*.wmt')
+output = execSync(cmd)
+console.log("Building text:", cmd)
+
+cmd = 'wyseman -s --dbname=' + DatabaseName + ' ' + path.join(wyselib, '*.wmi') + ' ' + path.join(wyselib, 'base', '*.wmi')
+output = execSync(cmd)
+console.log("Building SQL:", cmd)
+
+console.log("Writing sql file:")
+fs.writeFileSync('schema.sql', output)
+
+//Drop our database when done
+console.log("Dropping temporary database:", DatabaseName)
+output = execSync("dropdb " + DatabaseName)

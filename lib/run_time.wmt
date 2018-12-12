@@ -39,10 +39,11 @@ tabtext wm.objects_v_depth {Dep Objects}	{An enhanced view of the object table, 
 
 tabtext wm.depends_v	{Dependencies}	{A recursive view showing which database objects depend on (must be created after) other database objects.} {
     {object		{Object}	{Full object type and name (type:name)}}
-    {obj_typ		{Type}		{Function, view, table, etc}}
-    {obj_nam		{Name}		{Schema and name of object as known within that schema}}
+    {od_typ		{Type}		{Function, view, table, etc}}
+    {od_nam		{Name}		{Schema and name of object as known within that schema}}
+    {od_release		{Release}	{The release this object belongs to}}
+    {cycle		{Cycle}		{Prevents the recursive view gets into an infinite loop}}
     {depend		{Depends On}	{Another object that must be created before this object}}
-    {release		{Release}	{The release this object belongs to}}
     {depth		{Depth}		{The depth of the dependency tree, when following this particular dependency back to the root.}}
     {path		{Path}		{The path of the dependency tree above this object}}
     {fpath		{Full Path}	{The full path of the dependency tree above this object (including this object).}}
@@ -115,7 +116,9 @@ tabtext wm.table_data	{Table Data}	{Contains information from the system catalog
     {td_tab		{Table Name}	{The name of the table being described}}
     {tab_kind		{Kind}		{Tells whether the relation is a table or a view}}
     {has_pkey		{Has Pkey}	{Indicates whether the table has a primary key defined in the database}}
-    {columns		{Columns}	{Indicates how many columns are in the table}}
+    {obj		{Object Name}	{The table name, prefixed by the schema (namespace) name}}
+    {cols		{Columns}	{Indicates how many columns are in the table}}
+    {system		{System}	{True if the table/view is built in to PostgreSQL}}
 }
 
 tabtext wm.table_pub	{Tables}	{Joins information about tables from the system catalogs with the text descriptions defined in wyseman} {
@@ -125,8 +128,10 @@ tabtext wm.table_pub	{Tables}	{Joins information about tables from the system ca
 }
 
 tabtext wm.view_column_usage {View Column Usage} {A version of a similar view in the information schema but faster.  For each view, tells what underlying table and column the view column uses.} {
+    {view_catalog	{View Database}	{The database the view belongs to}}
     {view_schema	{View Schema}	{The schema the view belongs to}}
     {view_name		{View Name}	{The name of the view being described}}
+    {table_catalog	{Table Database} {The database the underlying table belongs to}}
     {table_schema	{Table Schema}	{The schema the underlying table belongs to}}
     {table_name		{Table Name}	{The name of the underlying table}}
     {column_name	{Column Name}	{The name of the column in the view}}
@@ -138,7 +143,54 @@ tabtext wm.column_data	{Column Data}	{Contains information from the system catal
     {cdt_col		{Column Name}	{The name of the column whose data is being described}}
     {field		{Field}		{The number of the column as it appears in the table}}
     {nonull		{Not Null}	{Indicates that the column is not allowed to contain a null value}}
+    {length		{Length}	{The normal number of characters this item would occupy}}
+    {type		{Data Type}	{The kind of data this column holds, such as integer, string, date, etc.}}
+    {def		{Default}	{Default value for this column if none is explicitly assigned}}
+    {tab_kind		{Table/View}	{The kind of database relation this column is in (r=table, v=view)}}
     {is_pkey		{Def Prim Key}	{Indicates that this column is defined as a primary key in the database (can be overridden by a wyseman setting)}}
+}
+
+tabtext wm.column_def	{Column Default} {A view used internally for initializing columns to their default value} {
+    {val		{Init Value}	{An expression used for default initialization}}
+}
+
+tabtext wm.column_istyle {Column Styles} {A view of the default display styles for table and view columns} {
+    {nat_value		{Native Style}	{The inherited style as specified by an ancestor object}}
+    {cs_value		{Given Style}	{The style, specified explicitly for this object}}
+    {cs_obj		{Object Name}	{The schema and table name this style applies to}}
+}
+
+tabtext wm.column_lang {Column language} {A view of descriptive language data as it applies to the columns of tables and views} {
+    {sch		{Schema}	{The schema that holds the table or view this language data applies to}}
+    {tab		{Table}		{The table or view this language data applies to}}
+    {obj		{Object}	{The schema name and the table/view name}}
+    {col		{Column}	{The name of the column the metadata applies to}}
+    {values		{Values}	{A JSON description of the allowable values for this column}}
+    {system		{System}	{Indicates if this table/view is built in to PostgreSQL}}
+    {nat		{Native}	{The (possibly ancestor) schema and table/view this language information descends from}}
+}
+
+tabtext wm.column_meta {Column Metadata} {A view of data about the use and display of the columns of tables and views} {
+    {sch		{Schema}	{The schema that holds the table or view this metadata applies to}}
+    {tab		{Table}		{The table or view this metadata applies to}}
+    {obj		{Object}	{The schema name and the table/view name}}
+    {col		{Column}	{The name of the column the metadata applies to}}
+    {values		{Values}	{An array of allowable values for this column}}
+    {styles		{Styles}	{An array of default display styles for this column}}
+    {nat		{Native}	{The (possibly ancestor) schema and table/view this metadata descends from}}
+}
+
+tabtext wm.table_lang {Table Language} {A view of titles and descriptions of database tables/views} {
+    {messages		{Messages}	{Human readable messages the computer may generate in connection with this table/view}}
+    {columns		{Columns}	{A JSON structure describing language information relevant to the columns in this table/view}}
+    {obj		{Object}	{The schema and table/view}}
+}
+
+tabtext wm.table_meta {Table Metadata} {A view of data about the use and display of tables and views} {
+    {fkeys		{Foreign Keys}	{A JSON structure containing information about the foreign keys pointed to by this table}}
+    {obj		{Object}	{The schema and table/view}}
+    {pkey		{Primary Key}	{A JSON array describing the primary key fields for this table/view}}
+    {columns		{Columns}	{A JSON structure describing metadata information relevant to the columns in this table/view}}
 }
 
 tabtext wm.column_pub	{Columns}	{Joins information about table columns from the system catalogs with the text descriptions defined in wyseman} {
