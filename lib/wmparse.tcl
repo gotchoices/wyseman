@@ -556,7 +556,7 @@ proc wmparse::tabdef {table args} {
             append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) select '$schema','$table',cs_col,sw_name,sw_value from wm.column_style where cs_sch = '$sch' and cs_tab = '$tab' on conflict do nothing;\n"
 #puts "query:$query"
         } else {
-            append query "insert into wm.table_style (ts_sch,ts_tab,sw_name,sw_value) values ('$schema','$table','[string range $sw 1 end]','[regsub {'} $va {''}]');\n"
+            append query "insert into wm.table_style (ts_sch,ts_tab,sw_name,sw_value) values ('$schema','$table','[string range $sw 1 end]','[regsub {'} [string trim $va] {''}]');\n"
         }
     }
 
@@ -571,7 +571,7 @@ proc wmparse::tabdef {table args} {
               lappend fldlist $c
             }
             set fldlist "'[join $fldlist {','}]'"; set idxlist "'[join $idxlist {','}]'"
-#puts "fldlist:$fldlist"; puts "idxlist:$idxlist"
+#puts "$tabswitch fldlist:$fldlist\n        idxlist:$idxlist"
             append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) select cdt_sch,cdt_tab,cdt_col,'$tabswitch',coalesce(array_position(Array\[$idxlist\], cdt_col::text), 0) from wm.column_data where cdt_sch = '$schema' and cdt_tab = '$table' and cdt_col in ($fldlist) on conflict do nothing;\n"
         }
     }
