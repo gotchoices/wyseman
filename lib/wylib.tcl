@@ -65,12 +65,12 @@ proc xswitch {sw av {vv {}} {sv {}} {rm 1}} {
 
 # Call above repeatedly until all matching switches have been extracted
 #------------------------------------------
-proc xswitchs {sw av {vv {}}} {
+proc xswitchs {sw av {vv {}} {rm 1}} {
     upvar $av alist
     set retval {}
 
     while {[lcontain $alist "-$sw"]} {
-        set retval [uplevel xswitch $sw $av $vv]
+        set retval [uplevel xswitch $sw $av $vv $rm]
     }
     return $retval
 }

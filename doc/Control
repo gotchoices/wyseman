@@ -1,0 +1,109 @@
+Wyseman Control Layer Interface Specification
+
+Wyseman's tabdef objects (normally in wmd files) generally contain information 
+describing how things should be presented in the user interface.  This 
+information is centered around database tables and views, much as with
+tabtext (language) objects and regular database objects.
+
+In the original Wyseman implementation, the tabdef objects got crunched down
+to a series of run-time libraries that would be loaded by the view layer as it
+needed them.  But in a browser-based implementation, that is not workable.  And
+besides, it was never that good of a system anyway.
+
+So in the Ruby/JS implementation, tabdef information is stored in the database
+as meta data.  This makes it easy to access in the GUI so we can present table
+information in a standarized way.
+
+A further extension relates to the control layer and is the subject of this
+document.  Specifically, when a user has a particular view open, there are
+usually things he will want to do, besides just viewing the data in that table
+or view.  We will divide these into 3 categories:
+
+  Sub-views:
+	This contains information about what related tables/views the user
+	can automatically access, as a consequence of accessing some other 
+	particular table/view.  As an example, if I am editing user contact
+	information, I should also be able to preview, and possibly edit,
+	address and communications records.
+	
+	This would normally be done by opening a preview window which is
+	associated with an existing record editing window.  The idea is, the
+	preview windows will automatically update to reflect records which
+	are linked to the currently loaded record in the editing window.
+	
+	The wyseman database contains good information about how the foreign 
+	keys in one table relate to various fields in other tables.  However
+	the business logic of a particular ERP probably does not want every
+	user following every possible link.  Rather, it is best to specify
+	these explicitly so the GUI knows what links to present.
+	
+  Actions:
+	This describes a class of actions the user may need to access when
+	working within a particular view.  The standard GUI automatically has
+	provisions for the standard CrUD methods:
+	
+	  Create
+	  Update
+	  Delete
+	
+	Various views should have an existing permission structure that will
+	allow a subset of these operations to users in a particular role.
+	However, there are sometimes additional actions that will be
+	necessary.  Typically these could represent a stored procedure the
+	user could call, with a defined set of optional parameters.
+	
+	Alternately, an action might invoke a function in the control layer
+	that does not correlate directly to a single backend function.
+	
+	Some examples might include the following:
+	  - Generate a cryptographic key for the currently loaded user
+	  - Send an email notification to the user
+	  - Issue a quotation request for a set of part numbers
+	  - Issue electronic fund transfers for the selected transactions
+	
+	An action might be relevant to a single record, as might be indicated
+	by an editing window, which can only hold one record at a time.  Or,
+	an action might rightly apply to a group of record, selected or
+	displayed in a preview window.  The syntax should indicate if there
+	are any particular limitations in this regard.  And the GUI should
+	present the choices accordingly to the user.
+	
+  Reports:
+	Normal ERP functions require the regular production of reports.  It is
+	one thing to view data in a preview list or an editing widget.  But in
+	most cases, we need to get to a finished product such as the following
+	examples:
+	
+	  - Invoice, Purchase Order
+	  - Balance Sheet or other financial report
+	  - Charts and graphs
+	  - Data grid with column totals and/or other summary information
+	  - Date ranging of various tables/views
+	  - Mail merge form letters
+	
+	In addition to displaying data in some formatted way, a report 
+	typically involves a set of configuration data in addition to the 
+	normal source data it is processing.  For example, a financial report
+	will normally require a date range to be specified.
+	
+	When a report is invoked, the GUI should present a query widget
+	containing the necessary input fields to collect and control the report
+	parameters.  The widget should also contain controls to regenerate
+	the report on demand.  Once the report widget is opened, the control
+	server should create a document at a particular URL, and inform the
+	GUI of that location.
+	
+	The GUI should then open an independent window whose sole job is to
+	display the document.  Where possible, that window should automatically
+	refresh as the report is regenerated.
+	
+	All the logic for generating the report should run in the control layer
+	or the database backend.  The GUI should only collect user input and
+	respond to the user's command.
+	
+	Report methods/formats might include:
+
+	  - Exports to an external spreadsheet (Excel, csv, Google Sheets)
+	  - Generation of an arbitrary web page (Anything html can do)
+	  - Charts, graphs, images (svg, gif, png, jpg)
+	  - Portable Document Format (pdf)

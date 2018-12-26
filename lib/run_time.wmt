@@ -54,6 +54,7 @@ tabtext wm.table_style	{Table Styles}	{Contains style flags to tell the GUI how 
     {ts_tab		{Table Name}	{The name of the table this style pertains to}}
     {sw_name		{Name}		{The name of the style being described}}
     {sw_value		{Value}		{The value for this particular style}}
+    {inherit		{Inherit}	{The value for this style can propagate to derivative views}}
 }
 
 tabtext wm.column_style	{Column Styles}	{Contains style flags to tell the GUI how to render the columns of a table or view} {

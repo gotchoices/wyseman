@@ -528,7 +528,7 @@ proc wmparse::tabdef {table args} {
 #    set ob($name.defs) $args
 
     argform {focus fields} args
-    argnorm {{focus 2} {fields 1} {inherits 1} {display 1} {sort 2}} args
+    argnorm {{focus 2} {fields 1} {inherits 1} {display 1} {sort 2} {subviews 2} {actions 1} {reports 1}} args
     lassign [table_parts $table] schema table
 
     set fargs [xswitchs fields args]		;#grab the field arguments
@@ -544,20 +544,37 @@ proc wmparse::tabdef {table args} {
         foreach {sw va} $fa {
             if {[string range $sw 0 0] != {-}} {error "Expected switch: $sw"}
 #            if {$va == {}} continue		;#exclude blank switches? (no)
-            append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) values ('$schema','$table','$tag','[string range $sw 1 end]','[regsub {'} $va {''}]');\n"
+            append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) values ('$schema','$table','$tag','[string range $sw 1 end]','[regsub -all {'} $va {''}]');\n"
         }
     }
 
-    foreach {sw va} $args {
+    set jargs {}
+#    set replist [actrep_list [xswitch reports args {} {} 0]]	;#convert report parameters to JSON; actions do everything we need, for now
+#    if {[llength $replist] > 0} {lappend jargs {-reports} "\[[join $replist ,]\]"}
+
+    set actlist [actrep_list [xswitch actions args {} {} 0]]	;#convert action parameters to JSON
+    if {[llength $actlist] > 0} {lappend jargs {-actions} "\[[join $actlist ,]\]"}
+
+    foreach sw {display subviews} {			;#convert display, subviews to JSON
+      set al [xswitch $sw args {} {} 0]
+      set alist {}; foreach lelem $al {lappend alist "\"$lelem\""}
+      if {[llength $al] > 0} {lappend jargs "-$sw" "\[[join $alist ,]\]"}
+    }
+    if {[set fo [xswitch focus args {} {} 0]] != {}} {lappend jargs "-focus" "\"$fo\""}	;#convert focus arg to JSON
+
+#Deprecated
+#    if {[set inh [xswitchs inherits args]] != {}} {	;#Handle -inherit switch
+#        lassign [split $inh {.}] sch tab
+#        append query "insert into wm.table_style (ts_sch,ts_tab,sw_name,sw_value) select '$schema','$table',sw_name,sw_value from wm.table_style where ts_sch = '$sch' and ts_tab = '$tab' and inherit on conflict do nothing;\n"
+#        append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) select '$schema','$table',cs_col,sw_name,sw_value from wm.column_style where cs_sch = '$sch' and cs_tab = '$tab' on conflict do nothing;\n"
+##puts "query:$query"
+#    }
+    
+    foreach {sw va} $jargs {			;#write table and column styles to database
         if {[string range $sw 0 0] != {-}} {error "Expected switch: $sw"}
-        if {$sw == {-inherits}} {
-            lassign [split $va {.}] sch tab
-            append query "insert into wm.table_style (ts_sch,ts_tab,sw_name,sw_value) select '$schema','$table',sw_name,sw_value from wm.table_style where ts_sch = '$sch' and ts_tab = '$tab' on conflict do nothing;\n"
-            append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) select '$schema','$table',cs_col,sw_name,sw_value from wm.column_style where cs_sch = '$sch' and cs_tab = '$tab' on conflict do nothing;\n"
-#puts "query:$query"
-        } else {
-            append query "insert into wm.table_style (ts_sch,ts_tab,sw_name,sw_value) values ('$schema','$table','[string range $sw 1 end]','[regsub {'} [string trim $va] {''}]');\n"
-        }
+        set caninherit [expr [lcontain {-reports -actions} $sw] ? false : true]
+#puts "sw:$sw caninherit:$caninherit"
+        append query "insert into wm.table_style (ts_sch,ts_tab,sw_name,sw_value,inherit) values ('$schema','$table','[string range $sw 1 end]','[regsub {'} [string trim $va] {''}]', $caninherit);\n"
     }
 
     if {[set focus [lindex [xswitchs focus args] 0]] != {}} {	;#Apply default focus column to correct column
@@ -577,4 +594,38 @@ proc wmparse::tabdef {table args} {
     }
 
     hand_query $table $query
+}
+
+# Escape quotes and backslashes in a string
+#------------------------------------------------------------
+proc wmparse::escape {instring} {
+    set result [regsub -all {'} $instring {''}]
+    set result [regsub -all {[\\]} $result {\\\\}]
+    return $result
+}
+
+# Parse report or action options into JSON format
+#------------------------------------------------------------
+proc wmparse::actrep_list {items} {
+    set toplist {}
+    foreach aa $items {
+      set aa [lassign $aa name]
+      argnorm {{multiple 1} {options 1}} aa
+#puts "aa:$aa"
+      set rec {}; lappend rec "\"name\":\"$name\""
+      set optlist {}
+      foreach op [xswitchs options aa] {
+        argform {tag type style size subframe} op
+        argnorm {{tag 2} {type 2} {style 2} {size 2} {subframe 2} {spf 3 special} {special 2} {template 2} {hint 1} {initial 1} {focus 1} {onvalue 2} {offvalue 3}} op
+#puts "op:$op"
+        set opts {}
+        foreach {sw va} $op {lappend opts "\"[string range $sw 1 end]\":\"[escape $va]\""}
+        if {[llength $opts] > 0} {lappend optlist "{[join $opts ,]}"}
+      }
+      if {[llength $optlist] > 0} {lappend rec "\"options\":\[[join $optlist ,]\]"}
+      set mu [xswitchs multiple aa]; if {$mu != {}} {lappend rec "\"multiple\":\"$mu\""}
+      lappend toplist "{[join $rec ,]}"
+    }
+#puts "toplist:$toplist"
+    return $toplist
 }
