@@ -1,3 +1,3 @@
 module.exports={
-  DatabaseName: "wysemanTestDB"
+  DatabaseName: process.env.TEST_DB_NAME || "wysemanTestDB"
 }

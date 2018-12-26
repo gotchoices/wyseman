@@ -5,7 +5,7 @@
   "main": "lib/index.js",
   "scripts": {
     "tclpkg": "wmmkpkg wyseman 0.50 tcltk",
-    "test": "mocha test/mocha/checkdb.js"
+    "test": "mocha test/mocha/all.js"
   },
   "keywords": [
     "ERP",

@@ -5,12 +5,8 @@
 const assert = require("assert");
 const { DatabaseName } = require('../settings')
 var fs = require('fs')
-var logger = require('util').debuglog('checkdb')
-var log = {
-  trace: (...msg)=>logger(msg.join(' ')),
-  debug: (...msg)=>logger(msg.join(' ')),
-  error: (...msg)=>console.error(...msg),
-}
+//var logger = require('util').debuglog('checkdb')
+var log = new (require('../logger'))('checkdb')
 var dbClient = require("../../lib/dbclient.js")
 const dbConfig = {
   database: DatabaseName,
