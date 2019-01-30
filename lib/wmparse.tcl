@@ -482,7 +482,7 @@ proc wmparse::tabtext {table args} {
     argform {title help fields} args
     argnorm {{title 2} {help 2} {language 2} {fields 1} {errors 2} {messages 2 errors}} args
     lassign [table_parts $table] schema table
-    array set ca {language en}
+    array set ca {language eng}
     foreach tag {language} {xswitchs $tag args ca($tag)}
     foreach tag {title help fields errors} {set ca($tag) [regsub -all {'} [wmparse::macsub [xswitchs $tag args]] {''}]}
     set    query "delete from wm.table_text   where tt_sch = '$schema' and tt_tab = '$table' and language = '$ca(language)';\n"
@@ -610,7 +610,8 @@ proc wmparse::actrep_list {items} {
     set toplist {}
     foreach aa $items {
       set aa [lassign $aa name]
-      argnorm {{multiple 1} {options 1}} aa
+      argform {format} aa
+      argnorm {{format 1} {ask 1} {single 1} {options 1}} aa
 #puts "aa:$aa"
       set rec {}; lappend rec "\"name\":\"$name\""
       set optlist {}
@@ -623,7 +624,10 @@ proc wmparse::actrep_list {items} {
         if {[llength $opts] > 0} {lappend optlist "{[join $opts ,]}"}
       }
       if {[llength $optlist] > 0} {lappend rec "\"options\":\[[join $optlist ,]\]"}
-      set mu [xswitchs multiple aa]; if {$mu != {}} {lappend rec "\"multiple\":\"$mu\""}
+      foreach {sw va} $aa {
+#puts "sw:$sw va:$va"
+        lappend rec "\"[string range $sw 1 end]\":\"[escape $va]\""
+      }
       lappend toplist "{[join $rec ,]}"
     }
 #puts "toplist:$toplist"
