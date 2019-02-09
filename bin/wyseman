@@ -30,7 +30,8 @@ OptionParser.new do |op|
     op.banner = "Usage: wyseman [opts] source_file(s)"
     op.on('-?', '--help', 'Show help message') {STDERR.puts opts; exit}
     op.on('-n', '--dbname=name', 'Specify the database name explicitly (rather than defaulting to the username)') {|v| opts[:dbname] = v}
-    op.on('-h', '--host=name', 'Specify the database host name explicitly (rather than defaulting to the username)') {|v| opts[:host] = v}
+    op.on('-h', '--host=name', 'Specify the database host name explicitly (rather than defaulting to the local system)') {|v| opts[:host] = v}
+    op.on('-u', '--user=name', 'Specify the database user name explicitly (rather than defaulting to the username)') {|v| opts[:user] = v}
     op.on('-r', '--replace', 'Replace views/functions where possible') {opts[:repl] = true}
     op.on('-m', '--[no-]make', 'Build any uninstantiated objects in the database') {|v| opts[:make] = v}
     op.on('-p', '--[no-]prune', 'Remove any objects no longer in the source file(s)') {|v| opts[:prune] = v}
@@ -49,7 +50,7 @@ end.parse!
 #Fixme: turn back on when dump/restore implemented, if we need a local work space
 #FileUtils::mkdir_p opts[:work]			#Make sure working directory exists
 
-dbc = Wyseman::DB.new(dbname:opts[:dbname], host:opts[:host], devel:true)	#Connect to postgres; will make sure bootstrap/ddict exists
+dbc = Wyseman::DB.new(dbname:opts[:dbname], user:opts[:user], host:opts[:host], devel:true)	#Connect to postgres; will make sure bootstrap/ddict exists
 
 post_sql = ''
 if ARGV.length > 0
