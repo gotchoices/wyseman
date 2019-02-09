@@ -1,0 +1,36 @@
+#!/usr/bin/env ruby
+#Create a login ticket for the specified user
+#TODO:
+#- 
+
+require 'optparse'
+#require 'fileutils'
+require 'json'
+require 'wyseman'
+require 'wyseman/db'
+
+Usage = "Usage: ticket [opts] user_ID <domain> <port>"
+opts = {dbname:nil, host:'localhost', user:nil}
+
+OptionParser.new do |op|
+    op.banner = Usage
+    op.on('-?', '--help', 'Show help message') {STDERR.puts Usage; exit}
+    op.on('-n', '--dbname=name', 'Specify the database name explicitly (rather than defaulting to the username)') {|v| opts[:dbname] = v}
+    op.on('-h', '--host=name', 'Specify the database host name explicitly (rather than defaulting to the local system)') {|v| opts[:host] = v}
+    op.on('-u', '--user=name', 'Specify the database user name explicitly (rather than defaulting to the username)') {|v| opts[:user] = v}
+end.parse!
+#p 'Opts:', opts; p 'Args:', ARGV		#Debug
+if ARGV.length < 1
+  STDERR.puts Usage; exit
+end
+
+dbc = Wyseman::DB.new(dbname:opts[:dbname], user:opts[:user], host:opts[:host], devel:true)	#Connect to postgres; will make sure bootstrap/ddict exists
+
+userID = ARGV[0]
+ticket = dbc.x("select token,expires from base.token_login('#{userID}');")[0]
+
+ticket["host"] = ARGV[1] if ARGV.length > 1
+ticket["port"] = ARGV[2] if ARGV.length > 2
+
+#printf("ticket:%s\n", ticket)
+puts JSON[ticket]
