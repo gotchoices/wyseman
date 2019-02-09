@@ -1,5 +1,11 @@
 Change Log:
 
+1.0.8	2019-Feb
+	- Support for authenticated login over SSL
+	- Initial login from ticket
+	- Subsequent logins from signed message from private key
+	- Add CLI utility for generating access tickets
+
 1.0.0	2018-Dec	Release 6: Node.js 1.0.0
 	- Run-time support added for javascript programs.
 	- Enhancements to support more robust Wylib data dictionary
