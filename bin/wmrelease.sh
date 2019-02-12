@@ -1,5 +1,7 @@
 #!/bin/sh
 #Make the current directory into a release tar file
+#Copyright WyattERP.org; See license in root of this package
+# -----------------------------------------------------------------------------
 buildin=/tmp		#build release tar in this directory
 
 make clean		#make it clean first

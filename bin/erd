@@ -1,6 +1,7 @@
 #!/usr/bin/env wish
-#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
 #Test erd.tcl widget
+#Copyright WyattERP.org; See license in root of this package
+# -----------------------------------------------------------------------------
 package require wylib
 package require wyseman
 

@@ -1,5 +1,6 @@
 #Wyseman session; wrapper around TCL core parser
-#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
+#Copyright WyattERP.org; See license in root of this package
+# -----------------------------------------------------------------------------
 #TODO:
 #X- Warn if same object defined twice in same run
 #X- Make this work good enough for MyCHIPs for now

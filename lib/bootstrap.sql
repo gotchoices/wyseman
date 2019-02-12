@@ -1,5 +1,5 @@
 -- Bootstrap the schema with a table containing create/drop data about all other objects
--- Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
+-- Copyright WyattERP.org; See license in root of this package
 -- TODO:
 -- X- Find orphaned objects and delete them
 -- X- When deleting an item from objects, delete the actual object too

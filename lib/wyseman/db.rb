@@ -1,7 +1,7 @@
 #Open a connection to a database, to be managed by wyseman.
 #If the specified database doesn't exist, create it.
 #If the bootstrap schema doesn't exist, create that too.
-#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
+#Copyright WyattERP.org; See license in root of this package
 # -----------------------------------------------------------------------------
 #TODO:
 #- Test doInsert

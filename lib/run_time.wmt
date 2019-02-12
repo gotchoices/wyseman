@@ -1,5 +1,6 @@
 #Text descriptions for meta-data tables
-#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
+#Copyright WyattERP.org; See license in root of this package
+# -----------------------------------------------------------------------------
 
 tabtext wm.releases	{Releases}	{Tracks the version number of each public release of the database design} {
     {release		{Release}	{The integer number of the release, starting with 1.  The current number in this field always designates a work-in-progress.  The number prior indicates the last public release.}}

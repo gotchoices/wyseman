@@ -1,6 +1,7 @@
 #!/usr/bin/wish
 #A Graphical Interface for a wyseman-managed database
-#include(Copyright)
+#Copyright WyattERP.org; See license in root of this package
+# -----------------------------------------------------------------------------
 set cnf(title) "Wyseman Graphical Interface"      ;#Dec 2009
 #TODO:
 #- 

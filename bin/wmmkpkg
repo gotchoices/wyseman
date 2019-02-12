@@ -1,3 +1,5 @@
 #!/usr/bin/env ruby
+#Copyright WyattERP.org; See license in root of this package
+# -----------------------------------------------------------------------------
 
 exec File.join(File.expand_path(File.dirname(__FILE__)), 'wmmkpkg.sh'), *ARGV

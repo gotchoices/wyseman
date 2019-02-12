@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 #Command line interface for managing a schema in wyseman
+#Copyright WyattERP.org; See license in root of this package
+# -----------------------------------------------------------------------------
 #TODO:
 #X- Implement initialization files .wmi
 #X- Output SQL build files for app-level database generation

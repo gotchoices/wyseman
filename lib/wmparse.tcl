@@ -1,6 +1,6 @@
 #Parse wyseman schema description files
-#---------------------------------------
-#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
+#Copyright WyattERP.org; See license in root of this package
+#------------------------------------------------------------
 #TODO:
 #- 
 #puts "proc hand_object {\n[info body hand_object]\n}"		;#Debug

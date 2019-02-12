@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 #Create a login ticket for the specified user
+#Copyright WyattERP.org; See license in root of this package
+# -----------------------------------------------------------------------------
 #TODO:
 #- 
 

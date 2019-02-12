@@ -1,6 +1,6 @@
 #Build and maintain a data dictionary for wyseman schemas
+#Copyright WyattERP.org; See license in root of this package
 #---------------------------------------
-#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
 #TODO:
 #- 
 package require wylib

@@ -1,5 +1,7 @@
 #!/bin/bash
 #Set the package version in all tcl files according to what is in Makefile
+#Copyright WyattERP.org; See license in root of this package
+# -----------------------------------------------------------------------------
 
 if [ ! -z "$2" ]; then
     lib="$1"

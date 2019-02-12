@@ -1,5 +1,6 @@
 #Schema to track meta-data about tables, columns, views, etc.
-#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
+#Copyright WyattERP.org; See license in root of this package
+# -----------------------------------------------------------------------------
 #TODO
 #- Fix support for multiple languages
 #- A pkey column, in a view but by a different name, doesn't seem to show up in the view as a pkey, without an explicity -primary reference

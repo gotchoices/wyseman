@@ -1,6 +1,6 @@
 # Misc functions borrowed from wylib we will use in our schema parsing
-#------------------------------------------
-#Copyright WyattERP: GNU GPL Ver 3; see: License in root of this package
+#Copyright WyattERP.org; See license in root of this package
+#------------------------------------------------------------
 
 # Find shortcut arguments (missing their switch) and add it in
 #------------------------------------------
