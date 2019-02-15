@@ -480,15 +480,20 @@ proc wmparse::table_parts {table {join {}}} {
 #------------------------------------------------------------
 proc wmparse::tabtext {table args} {
     argform {title help fields} args
-    argnorm {{title 2} {help 2} {language 2} {fields 1} {errors 2} {messages 2 errors}} args
+    argnorm {{title 2} {help 2} {language 2} {fields 1} {errors 2} {messages 2 errors} {append 1}} args
     lassign [table_parts $table] schema table
-    array set ca {language eng}
-    foreach tag {language} {xswitchs $tag args ca($tag)}
+    array set ca {language eng append 0}
+    foreach tag {language append} {xswitchs $tag args ca($tag)}
     foreach tag {title help fields errors} {set ca($tag) [regsub -all {'} [wmparse::macsub [xswitchs $tag args]] {''}]}
-    set    query "delete from wm.table_text   where tt_sch = '$schema' and tt_tab = '$table' and language = '$ca(language)';\n"
-    append query "delete from wm.column_text  where ct_sch = '$schema' and ct_tab = '$table' and language = '$ca(language)';\n"
-    append query "delete from wm.value_text   where vt_sch = '$schema' and vt_tab = '$table' and language = '$ca(language)';\n"
-    append query "delete from wm.message_text where mt_sch = '$schema' and mt_tab = '$table' and language = '$ca(language)';\n"
+#puts "append:$ca(append)"
+    if {$ca(append)} {
+      set query {}
+    } else {
+      set    query "delete from wm.table_text   where tt_sch = '$schema' and tt_tab = '$table' and language = '$ca(language)';\n"
+      append query "delete from wm.column_text  where ct_sch = '$schema' and ct_tab = '$table' and language = '$ca(language)';\n"
+      append query "delete from wm.value_text   where vt_sch = '$schema' and vt_tab = '$table' and language = '$ca(language)';\n"
+      append query "delete from wm.message_text where mt_sch = '$schema' and mt_tab = '$table' and language = '$ca(language)';\n"
+    }
     if {$ca(title) != {} || $ca(help) != {}} {
         append query "insert into wm.table_text (tt_sch,tt_tab,language,title,help) values ('$schema','$table','$ca(language)','$ca(title)',E'$ca(help)');\n"
     }
@@ -528,7 +533,7 @@ proc wmparse::tabdef {table args} {
 #    set ob($name.defs) $args
 
     argform {focus fields} args
-    argnorm {{focus 2} {fields 1} {inherits 1} {display 1} {sort 2} {subviews 2} {actions 1} {reports 1}} args
+    argnorm {{focus 2} {fields 1} {inherits 1} {display 1} {sort 2} {subviews 2} {actions 1} {json 1}} args
     lassign [table_parts $table] schema table
 
     set fargs [xswitchs fields args]		;#grab the field arguments
@@ -549,11 +554,14 @@ proc wmparse::tabdef {table args} {
     }
 
     set jargs {}
-#    set replist [actrep_list [xswitch reports args {} {} 0]]	;#convert report parameters to JSON; actions do everything we need, for now
-#    if {[llength $replist] > 0} {lappend jargs {-reports} "\[[join $replist ,]\]"}
-
-    set actlist [actrep_list [xswitch actions args {} {} 0]]	;#convert action parameters to JSON
+    set actlist [actrep_list [xswitch actions args {} {} 0]]	;#convert action parameters to JSON (from old tcl style)
     if {[llength $actlist] > 0} {lappend jargs {-actions} "\[[join $actlist ,]\]"}
+
+    set jsonlist [xswitch json args {} {} 0]		;#Parse direct json-provided values
+    foreach {sw va} $jsonlist {
+      if {[string range $sw 0 0] != {-}} {set sw "-$sw"}
+      lappend jargs $sw $va
+    }
 
     foreach sw {display subviews} {			;#convert display, subviews to JSON
       set al [xswitch $sw args {} {} 0]
@@ -569,7 +577,7 @@ proc wmparse::tabdef {table args} {
 #        append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) select '$schema','$table',cs_col,sw_name,sw_value from wm.column_style where cs_sch = '$sch' and cs_tab = '$tab' on conflict do nothing;\n"
 ##puts "query:$query"
 #    }
-    
+
     foreach {sw va} $jargs {			;#write table and column styles to database
         if {[string range $sw 0 0] != {-}} {error "Expected switch: $sw"}
         set caninherit [expr [lcontain {-reports -actions} $sw] ? false : true]
