@@ -23,8 +23,8 @@
 require 'optparse'
 require 'fileutils'
 require 'csv'
-require 'wyseman'
-require 'wyseman/db'
+require_relative '../lib/wyseman'
+#require_relative '../lib/wyseman/db'
 
 opts = {test:nil, dbname:nil, host:'localhost', repl:nil, prune:true, drop:true, post:true, make:true, branch:'', work:'/var/tmp/wyseman'}
 
