@@ -14,7 +14,7 @@
 #- 
 
 require 'tk'		#See: https://github.com/ruby/tk/blob/master/MANUAL_tcltklib.eng
-require 'wyseman/db'
+require_relative './wyseman/db'
 
 module Wyseman
 
