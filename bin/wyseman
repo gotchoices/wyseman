@@ -7,6 +7,7 @@
 #X- Output SQL build files for app-level database generation
 #X- Create version part of bootstrap schema, no matter what (even in non-devel)
 #X- schema wm, wm.release, and wm.create_group
+#- --no-post causes error message on "exit 0" (because tcl thread is still running?)
 #- How to input/update table migration scripts (such as changing column names, adding or deleting columns)
 #- Manage releases:
 #-   Test: versions > 1 function correctly

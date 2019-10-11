@@ -6,7 +6,7 @@
 -- X- Is there a way to create /var/tmp/wyseman automatically if it doesn't exist?
 -- - Test: Releases > 1 function correctly
 -- - Test: Can't change items part of a prior release
--- - Bug: orphan check only works if at least one object still remains in the source file
+-- - Bug: orphan check only works if at least one object still remains in the source file (or distinct join fails)
 -- - If table columns have changed, apply alter script before drop/create of table
 -- - Function to output sql for a module, or a release
 -- - 
@@ -152,7 +152,7 @@ create or replace function wm.check_drafts(orph boolean default false) returns b
     prec	record;		-- previous latest record
     changes	boolean default false;
   begin
-    if orph then		-- Find any orphaned objects
+    if orph then		-- Find any orphaned objects (only works if there is at least one valid object remaining in each source file)
       for drec in		
         select o.*
           from	wm.objects	o
