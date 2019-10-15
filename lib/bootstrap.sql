@@ -107,6 +107,7 @@ create or replace function wm.grant(
     cln		boolean;	-- from object record
   begin
     select grants, clean into grlist, cln from wm.objects where obj_typ = otyp and obj_nam = onam and obj_ver = 0;
+--raise notice 'Grant: % % % %', onam, grlist, priv, pstr;
     if not FOUND then
       raise 'Can not find defined object:%:% to associate permissions with', otyp, onam;
     end if;
@@ -114,7 +115,9 @@ create or replace function wm.grant(
       if not cln then raise notice 'Grant: % multiply defined on object:%:%', pstr, otyp, onam; end if;
       return false;
     else
-      update wm.objects set clean = false, grants = grlist || pstr where obj_typ = quote_nullable(otyp) and obj_nam = quote_nullable(onam) and obj_ver = 0;
+      update wm.objects set clean = false, grants = grlist || pstr where obj_typ = otyp and obj_nam = onam and obj_ver = 0;
+--select grants into grlist from wm.objects where obj_typ = otyp and obj_nam = onam and obj_ver = 0;
+--raise notice 'Update: % % %', onam, pstr, grlist;
     end if;
     return true;
   end;
@@ -144,7 +147,7 @@ create or replace view wm.objects_v as
   from		wm.objects	o
   join		wm.releases	r	on r.release between o.min_rel and o.max_rel;
   
--- Check any draft entries, to be merged or promoted
+-- Check any draft (obj_ver=0) entries, to be merged or promoted
 -- ----------------------------------------------------------------------------
 create or replace function wm.check_drafts(orph boolean default false) returns boolean language plpgsql as $$
   declare
