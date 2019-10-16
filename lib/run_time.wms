@@ -513,10 +513,14 @@ view wm.fkey_pub {wm.fkey_data wm.column_native} {select
 # View members of roles by name
 #-------------------------------------------
 view wm.role_members {} {
-  select ro.rolname as role, me.rolname  as member
+  select ro.rolname				as role
+  , me.rolname					as member
+  , (string_to_array(ro.rolname,'_'))[1]	as priv
+  , (string_to_array(ro.rolname,'_'))[2]	as level
     from        	pg_auth_members am
     join        	pg_authid       ro on ro.oid = am.roleid
-    join        	pg_authid       me on me.oid = am.member;
+    join        	pg_authid       me on me.oid = am.member
+    where not ro.rolname like 'pg_%';
 } -primary {role member}
 
 # Show view columns that have ambiguous native tables
