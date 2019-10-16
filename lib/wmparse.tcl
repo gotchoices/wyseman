@@ -168,7 +168,7 @@ proc wmparse::object {obj args} {
     argnorm $v(swar) args
     foreach tag {name dep create drop grant} {set $tag [string trim [xswitchs $tag args]]}
     if {[llength $args] > 0} {error "Unrecognized parameters: $args"}
-#    set drop [string trim $drop]
+    set drop [macsub $drop]
 #    if {$create == {}} {error "Not enough parameters for $obj: $name"; return}
     if {$drop == {}} {
         set drop "drop $obj if exists $name;"
