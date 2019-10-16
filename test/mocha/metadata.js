@@ -3,13 +3,14 @@
 //- 
 
 const assert = require("assert");
-const { DatabaseName } = require('../settings')
+const { DatabaseName, DBAdmin } = require('../settings')
 var fs = require('fs')
 var log = new (require('../logger'))('metadata')
 var dbClient = require("../../lib/dbclient.js")
 
 const dbConfig = {
   database: DatabaseName,
+  user: DBAdmin,
   listen: "DummyChannel",		//Cause immediate connection to DB, rather than deferred
   schema: __dirname + "/../schema.sql"
 }
