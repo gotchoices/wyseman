@@ -12,6 +12,7 @@
 -- - 
 
 create schema if not exists wm;	-- Holds all the wyseman objects (common to development and distribution modes)
+grant usage on schema wm to public;
 
 -- Create a permission group (role) if it doesn't already exist (common to development and distribution modes)
 -- ----------------------------------------------------------------------------

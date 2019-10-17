@@ -16,7 +16,7 @@ table wm.table_style {} {
   , sw_value		varchar not null
   , inherit		boolean default true
   , primary key (ts_sch, ts_tab, sw_name)
-} -grant public
+}
 
 # Default display styles for columns
 #-------------------------------------------
@@ -27,7 +27,7 @@ table wm.column_style {} {
   , sw_name		varchar not null
   , sw_value		varchar not null
   , primary key (cs_sch, cs_tab, cs_col, sw_name)
-} -grant public
+}
     
 # Help text for tables
 #-------------------------------------------
@@ -38,7 +38,7 @@ table wm.table_text {} {
   , title		varchar
   , help		varchar
   , primary key (tt_sch, tt_tab, language)
-} -grant public
+}
 
 # Help text for columns
 #-------------------------------------------
@@ -50,7 +50,7 @@ table wm.column_text {} {
   , title		varchar
   , help		varchar
   , primary key (ct_sch, ct_tab, ct_col, language)
-} -grant public
+}
     
 # Help text for enumerated types
 #-------------------------------------------
@@ -63,7 +63,7 @@ table wm.value_text {} {
   , title		varchar		-- Normal title
   , help		varchar		-- longer help description
   , primary key (vt_sch, vt_tab, vt_col, value, language)
-} -grant public
+}
 
 # Help text for schema error and other messages
 #-------------------------------------------
@@ -75,7 +75,7 @@ table wm.message_text {} {
   , title		varchar		-- brief title for error message
   , help		varchar		-- longer help description
   , primary key (mt_sch, mt_tab, code, language)
-} -grant public
+}
     
 # A table to cache information about the native source(s) of a view's column
 #-------------------------------------------
@@ -89,7 +89,7 @@ table wm.column_native {} {
   , nat_exp		boolean not null default 'f'
   , pkey		boolean
   , primary key (cnt_sch, cnt_tab, cnt_col)	-- each column can have only zero or one table considered as its native source
-} -grant public
+}
 index {} wm.column_native {nat_sch nat_tab}
 
 # The rest is an abstraction layer on postgres system tables and the tables 
@@ -111,7 +111,7 @@ view wm.table_data {wm.column_data} {select
   join		pg_namespace	ns	on cl.relnamespace = ns.oid
   left join	(select cdt_sch,cdt_tab,array_agg(cdt_col) as pkey from (select cdt_sch,cdt_tab,cdt_col,field from wm.column_data where pkey order by 1,2,4) sq group by 1,2) kd on kd.cdt_sch = ns.nspname and kd.cdt_tab = cl.relname
   where		cl.relkind in ('r','v');	--only show tables and views
-} -primary {td_sch td_tab} -grant public
+} -primary {td_sch td_tab}
 
 # Unified information about non-system tables (legacy for TCL, mingles metadata and language data)
 #-------------------------------------------
@@ -291,7 +291,7 @@ view wm.column_istyle {wm.column_style wm.column_native} {select
     from	wm.column_native nn
     join	wm.column_style  ns	on ns.cs_sch = nn.nat_sch and ns.cs_tab = nn.nat_tab and ns.cs_col = nn.nat_col
   )		as		 zs	on zs.cs_sch = cs.cs_sch and zs.cs_tab = cs.cs_tab and zs.cs_col = cs.cs_col and zs.sw_name = cs.sw_name
-} -primary {cs_sch cs_tab cs_col sw_name} -grant public
+} -primary {cs_sch cs_tab cs_col sw_name}
 
 # Meta-data about columns
 #-------------------------------------------
@@ -385,7 +385,7 @@ view wm.column_def {wm.column_pub} {
       '$1.' || col || ' as ' || quote_ident(col)
     end as val
   from wm.column_pub order by obj, field
-} -primary {sch tab col} -grant public
+} -primary {sch tab col}
 
 # Generate an array of column names from their position numbers
 #-------------------------------------------

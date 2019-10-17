@@ -1,4 +1,7 @@
 -- Wyseman copy of function; Keep in sync with what is in bootstrap.sql
+create schema if not exists wm;
+grant usage on schema wm to public;
+
 create or replace function wm.create_role(grp text, subs text[] default '{}') returns boolean language plpgsql as $$
   declare
     retval	boolean default false;
