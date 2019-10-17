@@ -84,10 +84,7 @@ end
 if opts[:sql]					#Generate schema creation SQL on stdout
   schema_sql = "--Schema Creation SQL:\n"
   schema_sql << "create schema if not exists wm;\n"
-  schema_sql << %Q{create or replace function wm.create_group(grp varchar) returns boolean language plpgsql as $$
-  begin\n    if not exists (select rolname from pg_roles where rolname = grp) then
-      execute 'create role ' || grp || ';'; return true;
-    end if;\n    return false;\n  end;\n$$;\n}
+  schema_sql << File.open(File.join(__dir__, '../lib/roles.sql'), 'rb') {|io| io.read}
 
   version = dbc.one("select wm.release();")[0]
   schema_sql << %Q{create or replace function wm.release() returns int stable language plpgsql as $$

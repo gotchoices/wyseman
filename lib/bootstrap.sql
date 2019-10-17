@@ -15,12 +15,19 @@ create schema if not exists wm;	-- Holds all the wyseman objects (common to deve
 
 -- Create a permission group (role) if it doesn't already exist (common to development and distribution modes)
 -- ----------------------------------------------------------------------------
-create or replace function wm.create_group(grp varchar) returns boolean language plpgsql as $$
+create or replace function wm.create_role(grp text, subs text[] default '{}') returns boolean language plpgsql as $$
+  declare
+    retval	boolean default false;
+    sub		text;
   begin
     if not exists (select rolname from pg_roles where rolname = grp) then
-      execute 'create role ' || grp || ';'; return true;
+      execute 'create role ' || grp;
+      retval = true;
     end if;
-    return false;
+    foreach sub in array subs loop
+      execute 'grant ' || sub || ' to ' || grp;
+    end loop;
+    return retval;
   end;
 $$;
 
@@ -45,7 +52,7 @@ $$;
 -- Untrusted language, and function to use it to create a working folder for backup/restore
 -- ----------------------------------------------------------------------------
 create language pltclu;
-create function wm.workdir() returns varchar stable language pltclu as $$
+create function wm.workdir() returns text stable language pltclu as $$
   set path {/var/tmp/wyseman}
   if {![file exists $path]} {file mkdir $path}
   return $path
@@ -54,20 +61,20 @@ $$;
 -- Contains an entry for each database object we are creating
 -- ----------------------------------------------------------------------------
 create table wm.objects (
-    obj_typ	varchar		not null		-- table, view, trigger, etc.
-  , obj_nam	varchar		not null		-- schema.name
+    obj_typ	text		not null		-- table, view, trigger, etc.
+  , obj_nam	text		not null		-- schema.name
   , obj_ver	int		not null default 0	-- incremented when the object changes from the last committed release
   , checked	boolean		default false		-- checked for merge, dependencies
   , clean	boolean		default false		-- instantiated in current database
-  , module	varchar		not null		-- name of the schema group this object belongs to
+  , module	text		not null		-- name of the schema group this object belongs to
   , mod_ver	int					-- version of the schema group this object belongs to
-  , source	varchar		not null		-- name of the source file this object defined in
-  , deps	varchar[]	not null		-- List of dependencies, as user entered them
-  , ndeps	varchar[]				-- List of normalized dependencies
-  , grants	varchar[]	not null default '{}'	-- List of grants
-  , col_data	varchar[]	not null default '{}'	-- Extra data about columns, for views
-  , crt_sql	varchar		not null		-- SQL to create the object
-  , drp_sql	varchar		not null		-- SQL to drop the object
+  , source	text		not null		-- name of the source file this object defined in
+  , deps	text[]		not null		-- List of dependencies, as user entered them
+  , ndeps	text[]					-- List of normalized dependencies
+  , grants	text[]		not null default '{}'	-- List of grants
+  , col_data	text[]		not null default '{}'	-- Extra data about columns, for views
+  , crt_sql	text		not null		-- SQL to create the object
+  , drp_sql	text		not null		-- SQL to drop the object
   , min_rel	int		default wm.release()	-- smallest release this object belongs to
   , max_rel	int		default wm.release()	-- largest release this object belongs to
   , crt_date	timestamp(0)	default current_timestamp	-- When record created
@@ -95,15 +102,15 @@ create trigger tr_bd before delete on wm.objects for each row execute procedure 
 -- Store a grant in the object table
 -- ----------------------------------------------------------------------------
 create or replace function wm.grant(
-    otyp	varchar		-- Object type we're granting permissions to
-  , onam	varchar		-- Object name we're granting permissions to
-  , priv	varchar		-- A privilege name, defined for the application
+    otyp	text		-- Object type we're granting permissions to
+  , onam	text		-- Object name we're granting permissions to
+  , priv	text		-- A privilege name, defined for the application
   , level	int		-- Application defined level 1,2,3 etc
-  , allow	varchar		-- select, insert, update, delete, etc
+  , allow	text		-- select, insert, update, delete, etc
 ) returns boolean language plpgsql as $$
   declare
-    pstr	varchar default array_to_string(array[otyp||':'||onam,priv,level::varchar,allow], ',');
-    grlist	varchar[];
+    pstr	text default array_to_string(array[otyp||':'||onam,priv,level::text,allow], ',');
+    grlist	text[];
     cln		boolean;	-- from object record
   begin
     select grants, clean into grlist, cln from wm.objects where obj_typ = otyp and obj_nam = onam and obj_ver = 0;
@@ -127,12 +134,12 @@ $$;
 -- ----------------------------------------------------------------------------
 create or replace view wm.depends_v as
   with recursive search_deps(object, obj_typ, obj_nam, depend, release, depth, path, cycle) as (
-      select (o.obj_typ || ':' || o.obj_nam)::varchar as object, o.obj_typ, o.obj_nam, null::varchar, r.release,0, '{}'::varchar[], false
+      select (o.obj_typ || ':' || o.obj_nam)::text as object, o.obj_typ, o.obj_nam, null::text, r.release,0, '{}'::text[], false
  	from	wm.objects	o
  	join	wm.releases	r on r.release between o.min_rel and o.max_rel
   	where o.ndeps = '{}'            		-- level 1 dependencies
     union
-      select (o.obj_typ || ':' || o.obj_nam)::varchar as object, o.obj_typ, o.obj_nam, d, r.release,depth + 1, path || d, d = any(path)
+      select (o.obj_typ || ':' || o.obj_nam)::text as object, o.obj_typ, o.obj_nam, d, r.release,depth + 1, path || d, d = any(path)
  	from	wm.objects	o
  	join	wm.releases	r	on r.release between o.min_rel and o.max_rel
  	join	unnest(o.ndeps)	d	on true
@@ -207,8 +214,8 @@ create or replace function wm.check_deps() returns boolean language plpgsql as $
   declare
     orec	record;		-- Outer loop record
     trec	record;		-- Dependency record
-    d		varchar;	-- Iterator
-    darr	varchar[];	-- Accumulates cleaned up array
+    d		text;		-- Iterator
+    darr	text[];		-- Accumulates cleaned up array
   begin
     for orec in select * from wm.objects_v where not checked loop
 -- raise notice 'Checking object:% rel:% deps:%', orec.object, orec.release, orec.deps;
@@ -246,7 +253,7 @@ create or replace view wm.objects_v_depth as
 
 -- Attempt to replace a view or function
 -- ----------------------------------------------------------------------------
-create or replace function wm.replace(obj varchar) 
+create or replace function wm.replace(obj text) 
   returns boolean language plpgsql as $$
   declare
     trec	record;
@@ -264,21 +271,21 @@ $$;
 -- Drop/create a group of database objects
 -- ----------------------------------------------------------------------------
 create or replace function wm.make(
-    objs varchar[]		-- array of objects to act on
+    objs text[]			-- array of objects to act on
   , drp boolean default true	-- drop objects in the specified branch
   , crt boolean default true	-- create objects in the specified branch
 --  , wrk text default '/var/tmp/wyseman'	-- server folder to store temp backup files in
 ) returns int language plpgsql as $$
   declare
-    s		varchar;		-- temporary string
+    s		text;			-- temporary string
     trec	record;			-- temp record
     irec	record;			-- info record
-    objlist	varchar[] default '{}';	-- expanded list of objects we will work on
-    collist	varchar;		-- list of columns to save/restore in table
+    objlist	text[] default '{}';	-- expanded list of objects we will work on
+    collist	text;			-- list of columns to save/restore in table
     cnt		int;			-- how many records saved/restored
-    garr	varchar[];		-- grant array
-    glev	varchar;		-- grant group_level
-    otype	varchar;		-- object type, coerced to table for views
+    garr	text[];			-- grant array
+    glev	text;			-- grant group_level
+    otype	text;			-- object type, coerced to table for views
     counter	int default 0;		-- how many objects we build
   begin
     if objs is null then		-- Defaults to drop/create of all unclean objects
@@ -292,7 +299,7 @@ create or replace function wm.make(
       objlist = objlist || array(select distinct object from wm.depends_v where s = any(fpath) and od_release = wm.release());
     end loop;
 -- raise notice 'objlist:%', objlist;
-    create temporary table _table_info (obj_nam varchar primary key, columns varchar, fname varchar, rows int);
+    create temporary table _table_info (obj_nam text primary key, columns text, fname text, rows int);
 
     if drp then			-- Drop specified objects
       for trec in select * from wm.objects_v_depth where object = any(objlist) and release = wm.release() order by depth desc loop
@@ -343,7 +350,7 @@ raise notice 'Create:% :%:', trec.depth, trec.object;
           if garr[2] = 'public' then
             glev = garr[2];
           else
-            perform wm.create_group(glev);
+            perform wm.create_role(glev);
           end if;
           otype = trec.obj_typ; if otype = 'view' then otype = 'table'; end if;
           execute 'grant ' || garr[4] || ' on ' || otype || ' ' || trec.obj_nam || ' to ' || glev || ';'; 
