@@ -13,7 +13,7 @@
 #- More TODOs in wmparse.tcl (implement text, defaults)
 #- 
 
-require 'tk'		#See: https://github.com/ruby/tk/blob/master/MANUAL_tcltklib.eng
+require 'tcltklib'		#See: https://github.com/ruby/tk/blob/master/MANUAL_tcltklib.eng
 require_relative './wyseman/db'
 
 module Wyseman
@@ -29,7 +29,7 @@ class Session
   
   def initialize(db)
     @db = db						#Remember our database connection
-    @tclip = TclTkIp.new(nil, false)
+    @tclip = TclTkIp.new(nil, nil)
     @fname = ''
     @ss = self.to_s[2..-2]				#Make hash index, unique to this instance
 #printf("Self:%s\n", @ss)
