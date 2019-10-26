@@ -16,6 +16,7 @@
 #-   Can generate SQL for any past version still in the database
 #-   Can generate sql to upgrade existing database to a specified release specification
 #-   Can dump wm.objects and restore it to a different site for version management there
+#- "Make objects" on a DB built from pre-packaged schema fails the first time (but then works)
 #- Dump selected, or all tables to text/backup files
 #- Restore selected or all tables
 #- List database objects in dependency/tree order
@@ -101,7 +102,7 @@ if opts[:sql]					#Generate schema creation SQL on stdout
         perm = (mod == 'public') ? mod : mod.to_s + '_' + level.to_s
         otyp = (otyp == 'view') ? 'table' : otyp
         if !roles.include?(perm) && perm != 'public'
-          schema_sql << "select wm.create_group('#{perm}');\n"
+          schema_sql << "select wm.create_role('#{perm}');\n"
           roles << perm 
         end
         schema_sql << "grant #{priv} on #{otyp} #{onam} to #{perm};\n"
