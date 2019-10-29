@@ -23,6 +23,8 @@
   "bin": {
     "erd": "bin/erd",
     "ticket": "bin/ticket",
+    "wmdump": "bin/wmdump",
+    "wmrestore": "bin/wmrestore",
     "wyseman": "bin/wyseman",
     "wysegi": "bin/wysegi"
   },

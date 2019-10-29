@@ -1,0 +1,44 @@
+#!/bin/bash
+#Copyright WyattERP.org; See license in root of this package
+# -----------------------------------------------------------------------------
+#Create a backup of the tables in a database
+# This is different from a regular pg_dump, which creates a full backup of
+# everything in the datbase.  Wyseman dump is primarily for backing up the
+# data in your tables.  The schema is intended to be created afresh from your
+# schema description.  Wyseman dump also creates backups of the individual
+# schema creation code for each table, but this is just for informational
+# purposes.  It typically is not used to recreate your tables.
+#
+
+dbname="wyatt"
+user="admin"
+port="5432"
+workdir="/var/tmp/wm_backup"
+
+pargs=()
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -h|--host) host="$2"; shift;;
+    -u|--user) user="$2"; shift;;
+    -p|--port) user="$2"; shift;;
+    -d|--dbname) dbname="$2"; shift;;
+    *) pargs+=("$1");;
+  esac
+  shift
+done
+if [ "${pargs[1]}" != "" ]; then
+    workdir="${pargs[1]}"
+fi
+#echo "host:$host db:$dbname user:$user workdir:$workdir"; exit 0
+if [ ! -d $workdir ]; then
+  mkdir -p $workdir
+fi
+
+sql="select distinct od_nam from wm.depends_v where od_typ = 'table' and od_release = wm.release() and not od_nam like 'wm.%' order by 1"
+for tab in $(psql -A -t $dbname $user -p $port -c "$sql"); do
+  datfile="${workdir}/$tab.dat"
+  echo "Dumping table: $tab to: $datfile"
+  pg_dump -U $user -d $dbname -p $port -a -x -E SQL_ASCII --disable-triggers -t $tab >$datfile
+  pg_dump -U $user -d $dbname -p $port -s -x -t $tab >${workdir}/$tab.sch
+  echo $(psql -A -t -p $port $dbname $user -c "select count(*) from $tab") >${workdir}/$tab.cnt
+done

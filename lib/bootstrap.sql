@@ -54,7 +54,7 @@ $$;
 -- ----------------------------------------------------------------------------
 create language pltclu;
 create function wm.workdir() returns text stable language pltclu as $$
-  set path {/var/tmp/wyseman}
+  set path {/var/tmp/wyseman.work}
   if {![file exists $path]} {file mkdir $path}
   return $path
 $$;
