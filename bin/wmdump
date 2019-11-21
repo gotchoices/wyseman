@@ -26,8 +26,8 @@ while [[ $# -gt 0 ]]; do
   esac
   shift
 done
-if [ "${pargs[1]}" != "" ]; then
-    workdir="${pargs[1]}"
+if [ "${pargs[0]}" != "" ]; then
+    workdir="${pargs[0]}"
 fi
 #echo "host:$host db:$dbname user:$user workdir:$workdir"; exit 0
 if [ ! -d $workdir ]; then
