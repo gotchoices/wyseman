@@ -543,8 +543,8 @@ proc wmparse::tabdef {table args} {
     
     foreach fa $fargs {				;#for each column
         set fa [lassign $fa tag]
-        argform {style size sub} fa		;#add switch names to all args
-        argnorm {{column 2} {title 2} {help 2} {subframe 2} {onvalue 3} {offvalue 4} {special 3} {spf 3 special} {background 2} {bg 2 background} {justify 2} {initial 3} {template 3} {optional 3} {state 3} {write 2} {depend 3} {display 2} {inside 2} {sort 2} {hint 2}} fa
+        argform {input size sub} fa		;#add switch names to all args
+        argnorm {{column 2} {title 2} {help 2} {subframe 2} {onvalue 3} {offvalue 4} {special 3} {spf 3 special} {background 2} {bg 2 background} {justify 2} {initial 3} {template 3} {optional 3} {state 3} {write 2} {depend 3} {display 2} {inside 3} {input 3} {sort 2} {hint 2}} fa
 
         foreach {sw va} $fa {
             if {[string range $sw 0 0] != {-}} {error "Expected switch: $sw"}
@@ -624,8 +624,8 @@ proc wmparse::actrep_list {items} {
       set rec {}; lappend rec "\"name\":\"$name\""
       set optlist {}
       foreach op [xswitchs options aa] {
-        argform {tag type style size subframe} op
-        argnorm {{tag 2} {type 2} {style 2} {size 2} {subframe 2} {spf 3 special} {special 2} {template 2} {hint 1} {initial 1} {focus 1} {onvalue 2} {offvalue 3}} op
+        argform {tag type input size subframe} op
+        argnorm {{tag 2} {type 2} {input 3} {size 2} {subframe 2} {spf 3 special} {special 2} {template 2} {hint 1} {initial 3} {focus 1} {onvalue 2} {offvalue 3}} op
 #puts "op:$op"
         set opts {}
         foreach {sw va} $op {lappend opts "\"[string range $sw 1 end]\":\"[escape $va]\""}
