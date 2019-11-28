@@ -103,13 +103,15 @@ view wm.table_data {wm.column_data} {select
   , cl.relname				as td_tab
   , ns.nspname || '.' || cl.relname	as obj
   , cl.relkind				as tab_kind
-  , cl.relhaspkey			as has_pkey
+--  , cl.relhaspkey			as has_pkey_old
+  , coalesce(ci.indisprimary,false)	as has_pkey		-- PG 12+
   , cl.relnatts				as cols
   , ns.nspname in ('pg_catalog','information_schema') as system
   , kd.pkey
   from		pg_class	cl
   join		pg_namespace	ns	on cl.relnamespace = ns.oid
   left join	(select cdt_sch,cdt_tab,array_agg(cdt_col) as pkey from (select cdt_sch,cdt_tab,cdt_col,field from wm.column_data where pkey order by 1,2,4) sq group by 1,2) kd on kd.cdt_sch = ns.nspname and kd.cdt_tab = cl.relname
+  left join	pg_index	ci	on ci.indrelid = cl.oid and ci.indisprimary
   where		cl.relkind in ('r','v');	--only show tables and views
 } -primary {td_sch td_tab}
 
@@ -219,7 +221,8 @@ view wm.column_data {wm.column_native} {select
   , a.attnum		as field
   , t.typname		as type
   , na.attnotnull	as nonull		-- notnull of native table
-  , nd.adsrc		as def
+  , pg_get_expr (nd.adbin,nd.adrelid)		as def	--PG 12+
+--  , nd.adsrc		as def
   , case when a.attlen < 0 then null else a.attlen end 	as length
   , coalesce(na.attnum = any((select conkey from pg_constraint
         where connamespace = nc.relnamespace
