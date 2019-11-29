@@ -23,6 +23,7 @@
   "bin": {
     "erd": "bin/erd",
     "ticket": "bin/ticket",
+    "wyseman-info": "bin/info.js",
     "wmdump": "bin/wmdump",
     "wmrestore": "bin/wmrestore",
     "wyseman": "bin/wyseman",
