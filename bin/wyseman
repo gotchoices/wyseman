@@ -28,13 +28,14 @@ require 'csv'
 require_relative '../lib/wyseman'
 #require_relative '../lib/wyseman/db'
 
-opts = {test:nil, dbname:nil, host:'localhost', repl:nil, prune:true, drop:true, post:true, make:true, branch:'', work:'/var/tmp/wyseman'}
+opts = {test:nil, dbname:nil, host:'localhost', port:5432, repl:nil, prune:true, drop:true, post:true, make:true, branch:'', work:'/var/tmp/wyseman'}
 
 OptionParser.new do |op|
     op.banner = "Usage: wyseman [opts] source_file(s)"
     op.on('-?', '--help', 'Show help message') {STDERR.puts opts; exit}
     op.on('-n', '--dbname=name', 'Specify the database name explicitly (rather than defaulting to the username)') {|v| opts[:dbname] = v}
     op.on('-h', '--host=name', 'Specify the database host name explicitly (rather than defaulting to the local system)') {|v| opts[:host] = v}
+    op.on('-P', '--port=port', 'Specify the database port explicitly (rather than defaulting to 5432)') {|v| opts[:port] = v}
     op.on('-u', '--user=name', 'Specify the database user name explicitly (rather than defaulting to the username)') {|v| opts[:user] = v}
     op.on('-r', '--replace', 'Replace views/functions where possible') {opts[:repl] = true}
     op.on('-m', '--[no-]make', 'Build any uninstantiated objects in the database') {|v| opts[:make] = v}
@@ -54,7 +55,7 @@ end.parse!
 #Fixme: turn back on when dump/restore implemented, if we need a local work space
 #FileUtils::mkdir_p opts[:work]			#Make sure working directory exists
 
-dbc = Wyseman::DB.new(dbname:opts[:dbname], user:opts[:user], host:opts[:host], devel:true)	#Connect to postgres; will make sure bootstrap/ddict exists
+dbc = Wyseman::DB.new(dbname:opts[:dbname], user:opts[:user], host:opts[:host], port:opts[:port], devel:true)	#Connect to postgres; will make sure bootstrap/ddict exists
 
 post_sql = ''
 if ARGV.length > 0
