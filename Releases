@@ -1,5 +1,13 @@
 Change Log:
 
+1.0.17	2020-Feb
+	- Retry if database not available
+	- Works with PostgreSQL 12
+	- Database dump/restore functions
+	- Wyseman can run properly with no DISPLAY
+	- Better isolation between websocket connections
+	- Improved grants/permissions
+
 1.0.12	2019-Oct
 	- Work with permission improvements in wyselib
 	- Improved logging
