@@ -1,4 +1,4 @@
-#!/bin/node
+#!/usr/bin/env node
 //Return information about the currently installed wylib package
 //Copyright WyattERP.org; See license in root of this package
 // -----------------------------------------------------------------------------
