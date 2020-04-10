@@ -13,6 +13,7 @@
 dbname="wyatt"
 user="admin"
 port="5432"
+host="localhost"
 workdir="/var/tmp/wm_backup"
 
 pargs=()
@@ -35,10 +36,10 @@ if [ ! -d $workdir ]; then
 fi
 
 sql="select distinct od_nam from wm.depends_v where od_typ = 'table' and od_release = wm.release() and not od_nam like 'wm.%' order by 1"
-for tab in $(psql -A -t $dbname $user -p $port -c "$sql"); do
+for tab in $(psql -A -t $dbname $user -h $host -p $port -c "$sql"); do
   datfile="${workdir}/$tab.dat"
   echo "Dumping table: $tab to: $datfile"
-  pg_dump -U $user -d $dbname -p $port -a -x -E SQL_ASCII --disable-triggers -t $tab >$datfile
-  pg_dump -U $user -d $dbname -p $port -s -x -t $tab >${workdir}/$tab.sch
-  echo $(psql -A -t -p $port $dbname $user -c "select count(*) from $tab") >${workdir}/$tab.cnt
+  pg_dump -U $user -d $dbname -h $host -p $port -a -x -E SQL_ASCII --disable-triggers -t $tab >$datfile
+  pg_dump -U $user -d $dbname -h $host -p $port -s -x -t $tab >${workdir}/$tab.sch
+  echo $(psql -A -t -h $host -p $port $dbname $user -c "select count(*) from $tab") >${workdir}/$tab.cnt
 done
