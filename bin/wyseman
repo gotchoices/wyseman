@@ -88,8 +88,8 @@ if opts[:sql]					#Generate schema creation SQL on stdout
   schema_sql << File.open(File.join(__dir__, '../lib/boot.sql'), 'rb') {|io| io.read}
 
   version = dbc.one("select wm.release();")[0]
-  schema_sql << %Q{create or replace function wm.release() returns int stable language plpgsql as $$
-  begin return #{version}; end;\n$$;\n}
+  schema_sql << %Q{create or replace function wm.release() returns int stable language sql as $$
+  select #{version};\n$$;\n}
   
   roles = []					#Keep track of roles we have created
   dbc.x("select obj_nam,crt_sql,grants from wm.objects_v_depth where release = wm.release() order by depth,obj_nam").values.each {|row|
