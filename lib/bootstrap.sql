@@ -4,6 +4,7 @@
 -- X- Find orphaned objects and delete them
 -- X- When deleting an item from objects, delete the actual object too
 -- X- Is there a way to create /var/tmp/wyseman automatically if it doesn't exist?
+-- X- If two makes run at once, one can overwrite the other's data file in workdir (can tag with unique session ID?)
 -- - Test: Releases > 1 function correctly
 -- - Test: Can't change items part of a prior release
 -- - Bug: orphan check only works if at least one object still remains in the source file (or distinct join fails)
@@ -53,8 +54,9 @@ $$;
 -- Untrusted language, and function to use it to create a working folder for backup/restore
 -- ----------------------------------------------------------------------------
 create language pltclu;
-create function wm.workdir() returns text stable language pltclu as $$
-  set path {/var/tmp/wyseman.work}
+create or replace function wm.workdir(uniq text default '') returns text stable language pltclu as $$
+  set path {/var/tmp/wyseman}
+  if {$1 != {}} {set path "$path/$1"}
   if {![file exists $path]} {file mkdir $path}
   return $path
 $$;
@@ -201,7 +203,7 @@ raise notice 'Increm: %:%', drec.obj_typ, drec.obj_nam;
           update wm.objects set obj_ver = prec.obj_ver + 1, checked = false, clean = false, mod_date = current_timestamp where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam and obj_ver = drec.obj_ver;
         end if;
       else						-- No changes from prior record, so delete the draft record
-raise notice 'Ignore: %:%', drec.obj_typ, drec.obj_nam;
+-- raise notice 'Ignore: %:%', drec.obj_typ, drec.obj_nam;
         delete from wm.objects where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam and obj_ver = 0;
       end if;
     end loop;
@@ -288,6 +290,7 @@ create or replace function wm.make(
     glev	text;			-- grant group_level
     otype	text;			-- object type, coerced to table for views
     counter	int default 0;		-- how many objects we build
+    sess_id	text default (select to_hex(trunc(extract (epoch from backend_start))::integer)||'.'||to_hex(pid) from pg_stat_activity where pid = pg_backend_pid());
   begin
     if objs is null then		-- Defaults to drop/create of all unclean objects
       objs = '{}';
@@ -317,7 +320,7 @@ raise notice 'Drop:% :%:', trec.depth, trec.object;
         if trec.obj_typ = 'table' and cnt > 0 then		-- Attempt to preserve existing table data
           collist = array_to_string(array(select column_name::text from information_schema.columns where table_schema || '.' || table_name = trec.obj_nam order by ordinal_position),',');
 -- raise notice 'collist:%', collist;
-          s = wm.workdir() || '/' || trec.obj_nam || '.dump';
+          s = wm.workdir(sess_id) || '/' || trec.obj_nam || '.dump';
           execute 'copy ' || trec.obj_nam || '(' || collist || ') to ''' || s || '''';
           get diagnostics cnt = ROW_COUNT;
 -- raise notice 'Count:%', cnt;
