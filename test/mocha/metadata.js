@@ -4,8 +4,9 @@
 
 const assert = require("assert");
 const { DatabaseName, DBAdmin } = require('../settings')
+const Log = require(require.resolve('wyclif/lib/log.js'))
+var log = Log('test-metadata')
 var fs = require('fs')
-var log = new (require('../logger'))('metadata')
 var dbClient = require("../../lib/dbclient.js")
 
 const dbConfig = {

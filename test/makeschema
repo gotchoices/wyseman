@@ -5,30 +5,31 @@
 //You can check for undocumented columns in the bootstrap schema.
 //Otherwise, everything else will get checked (normally plenty good)
 
-const DatabaseName = "wysemanSchemaDB"			//Use a different database name
-//const { DatabaseName } = require('./settings')	//Use the same one as the mocha tests
+const { DatabaseName, DBAdmin } = require('./settings')	//Use the same one as the mocha tests
+var databaseName = "wysemanSchemaDB"			//Use a different database name
 
 const { execSync } = require('child_process')
-const fs = require('fs')
-const path = require('path')
-const wyselib = path.join('..', 'node_modules', 'wyselib', 'schema')
+const Fs = require('fs')
+const Path = require('path')
+//const wyselib = Path.join('..', 'node_modules', 'wyselib', 'schema')
+const wyselib = Path.dirname(require.resolve('wyselib/schema/wylib.wmt'))
 
 var cmd, output
-cmd = 'wyseman --dbname=' + DatabaseName + ' ' + path.join(wyselib, '*.wms') + ' ' + path.join(wyselib, 'base', '*.wms')
+cmd = `wyseman --dbname=${databaseName} --user=${DBAdmin} ` + Path.join(wyselib, '*.wms') + ' ' + Path.join(wyselib, 'base', '*.wms')
 output = execSync(cmd)
 console.log("Building objects:", cmd)
 
-cmd = 'wyseman --dbname=' + DatabaseName + ' ' + path.join(wyselib, '*.wmt') + ' ' + path.join(wyselib, 'base', '*.wmt')
+cmd = `wyseman --dbname=${databaseName} --user=${DBAdmin} ` + Path.join(wyselib, '*.wmt') + ' ' + Path.join(wyselib, 'base', '*.wmt')
 output = execSync(cmd)
 console.log("Building text:", cmd)
 
-cmd = 'wyseman -s --dbname=' + DatabaseName + ' ' + path.join(wyselib, '*.wmi') + ' ' + path.join(wyselib, 'base', '*.wmi')
+cmd = `wyseman -s --dbname=${databaseName} --user=${DBAdmin} ` + Path.join(wyselib, '*.wmi') + ' ' + Path.join(wyselib, 'base', '*.wmi')
 output = execSync(cmd)
 console.log("Building SQL:", cmd)
 
 console.log("Writing sql file:")
-fs.writeFileSync('schema.sql', output)
+Fs.writeFileSync('schema.sql', output)
 
 //Drop our database when done
-console.log("Dropping temporary database:", DatabaseName)
-output = execSync("dropdb " + DatabaseName)
+console.log("Dropping temporary database:", databaseName)
+output = execSync(`dropdb -U ${DBAdmin} ` + databaseName)
