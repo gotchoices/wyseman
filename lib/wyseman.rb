@@ -53,7 +53,7 @@ class Session
     if !@db.one("select obj_nam from wm.objects where obj_typ = 'table' and obj_nam = 'wm.table_text'")	#If run_time schema not loaded yet
       parse File.join(File.dirname(__FILE__), 'run_time.wms')		#Parse it
       @db.t("select case when wm.check_drafts(true) then wm.check_deps() end;")	#Check versions/dependencies
-      @db.t("select wm.make(null, false, true);")			#But don't actually build it
+      @db.t("select wm.make(null, false, true);")			#And build it
       parse File.join(File.dirname(__FILE__), 'run_time.wmt')		#Read text descriptions
       parse File.join(File.dirname(__FILE__), 'run_time.wmd')		#Read display switches
     end
