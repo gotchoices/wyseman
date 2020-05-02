@@ -5,7 +5,10 @@ X- Implement custom (user defined) control layer
 X- Allow user defined hooks on standard controls
 - Separate run-time scripts to separate wyclif module (Control Layer InterFace)
 - Implement/store table modification microscripts where drop/create won't do
+-  When a table column is removed or renamed, the old data won't import (have to manually rename first)
+-  When a new constraint is added, the old data may not fit anymore.  May have to filter it.
+-  When an object is removed from the schema, items in the db may still be dependent on it and drops may not work without a cascade
 - Test/validate schema release versioning features
-- Tie single digit release number to associated semver release ID
+- Tie single digit release number to associated semver release ID?
 - Finish porting ruby run-time
 - 

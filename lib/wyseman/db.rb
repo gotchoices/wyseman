@@ -15,9 +15,9 @@ class DB < PG::Connection
   def initialize (opts = {})
     bootstrap = File.join(File.dirname(__FILE__), '..' , 'bootstrap.sql')
     schema = opts[:schema] || bootstrap			#Allow user-specified bootstrap file
-    opts.delete(:schema)
-    devel = opts[:devel]
-    opts.delete(:devel)
+    opts.delete(:schema)				#Clean opts to be used by PG super call
+    devel = opts[:devel] || false; opts.delete(:devel)
+    quiet = opts[:quiet] || false; opts.delete(:quiet)
     
 #puts "Opts:#{opts} schema:#{schema}"
     begin
@@ -33,7 +33,7 @@ class DB < PG::Connection
     end
 
     set_notice_receiver { |res|				#Callback for DB async notices
-      puts res.error_message().split("\n")[0];		#Strip out any CONTEXT: lines
+      puts res.error_message().split("\n")[0] if ! quiet	#Strip out any CONTEXT: lines
     }
       
     begin
@@ -51,7 +51,7 @@ class DB < PG::Connection
     
     @column_data = {}					#cache of column information
     @table_data = {}					#and table information
-  end
+  end		#Initialize
 
 # -----------------------------------------------------------------------------
   def x(query, parms = nil)				#Short-hand for exec

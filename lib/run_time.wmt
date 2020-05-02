@@ -272,6 +272,8 @@ tabtext wm.fkey_pub	{Key Info}		{Public view to see foreign key relationships be
 tabtext wm.role_members	{Role Members}	{Summarizes information from the system catalogs about members of various defined roles} {
     {role		{Role}		{The name of a role}}
     {member		{Member}	{The username of a member of the named role}}
+    {priv		{Privilege}	{The privilege this role relates to}}
+    {level		{Level}		{What level this role has in the privilge}}
 }
 
 tabtext wm.column_ambig	{Ambiguous Columns} {A view showing view and their columns for which no definitive native table and column can be found automatically} {

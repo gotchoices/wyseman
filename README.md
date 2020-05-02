@@ -13,7 +13,7 @@ Run-time support includes:
 * Legacy TCL
 
 This is how it works.
-You author your SQL objects inside TCL containers like this:
+You author your SQL objects inside TCL data containers like this:
 ```
     table myschema.mytable {dependency1 dependency2 ...} {
       columnA	typeA 	primary key,
@@ -21,16 +21,14 @@ You author your SQL objects inside TCL containers like this:
       columnC	typeC		-- Just as in 'table create'
     }
 ```
-This tells wyseman what your object is, how to create it, 
-and unless it is already obvious, how to drop it.
-Most importantly, it tells if there are other objects that
-will have to be recreated as well if we want to rebuilt this one.
+This tells wyseman what your object is, how to create it, and unless it is 
+self-evident, how to drop it.  Most importantly, it tells if there are other 
+objects that will have to be recreated as well if we want to rebuilt this one.
 
 There are two other very similar object decriptions you can make too:
 
 1. A *tabtext* contains language data about the table, columns, and possible
-values for your data.
-You can define this for any number of different languages.
+values for your data.  You can define this for any number of different languages.
 For example:
 
 ```
@@ -45,19 +43,16 @@ For example:
   } -language en
 ```
 
-2. A *tabdef* contains information about how your tables
-and views should normally render and otherwise, be handled, 
-in the user's view.
+2. A *tabdef* contains information about how your tables and views should 
+normally render and otherwise, be handled, in the user's view.
 
-Once you have your schema defined, just tell wyseman to build it
-from your files.
+Once you have your schema defined, just tell wyseman to build it from your files.
 It will store all your objects into a special schema in the database.
-And on your command, it will build the target schema you have just
-designed.
+And on your command, it will build the target schema you have just designed.
 
-Then, as you make changes to your object definitions, wyseman can
-modify and upgrade the running database, without disrupting any
-data it may contain, to keep it current with your design.
+Then, as you make changes to your object definitions, wyseman can modify and 
+upgrade the running database, without disrupting any data it may contain, to 
+keep it current with your design.
 
 Now go create your frontend using [Wylib](http://github.com/gotchoices/wylib)
 and your application will automatically have access to all the information
@@ -65,14 +60,14 @@ about your database tables, columns and so forth.
 
 There is also an associated package called 
 [Wyselib](http://github.com/gotchoices/wyselib)
-that contains a bunch of basic schema components for handling common
-things like people, accounts, products, etc.
+that contains a bunch of basic schema components for handling common things 
+like people, accounts, products, etc.
 
-These packages work together to make it relatively painless to make
-and more importantly, *maintain* a production database application.
+These packages work together to make it relatively painless to make and more 
+importantly, *maintain* a production database application.
 
 ----
-### Background
+### Background History
 When I first started using SQL relational databases, there was one issue
 I continually struggled with:  How is it best to maintain the source 
 definition of my database schema.

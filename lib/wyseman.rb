@@ -29,7 +29,7 @@ class Session
   
   def initialize(db)
     @db = db						#Remember our database connection
-    @tclip = TclTkIp.new(nil, nil)
+    @tclip = TclTkIp.new(nil, nil)			#Create Tcl interpreter
     @fname = ''
     @ss = self.to_s[2..-2]				#Make hash index, unique to this instance
 #printf("Self:%s\n", @ss)
@@ -42,7 +42,7 @@ class Session
     @tclip._eval("proc hand_cnat {name obj col nat ncol} {eval [list ruby #{cbname}('[join [list cnat $name $obj $col $nat $ncol] {','}]')]}")
     @tclip._eval("proc hand_pkey {name obj cols} {eval [list ruby #{cbname}('[join [list pkey $name $obj $cols] {','}]')]}")
 
-    %w(wylib wmparse).each { |f|			#Read tcl code files
+    %w(wylib wmparse).each { |f|			#Read/execute tcl code files
       begin
         @tclip._eval(File.open(File.join(File.dirname(__FILE__), f + '.tcl'),'rb') {|io| io.read})
       rescue Exception => e
@@ -53,7 +53,7 @@ class Session
     if !@db.one("select obj_nam from wm.objects where obj_typ = 'table' and obj_nam = 'wm.table_text'")	#If run_time schema not loaded yet
       parse File.join(File.dirname(__FILE__), 'run_time.wms')		#Parse it
       @db.t("select case when wm.check_drafts(true) then wm.check_deps() end;")	#Check versions/dependencies
-#      @db.t("select wm.make(null, false, true);")			#But don't actually build it
+      @db.t("select wm.make(null, false, true);")			#But don't actually build it
       parse File.join(File.dirname(__FILE__), 'run_time.wmt')		#Read text descriptions
       parse File.join(File.dirname(__FILE__), 'run_time.wmd')		#Read display switches
     end

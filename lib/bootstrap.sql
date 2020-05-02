@@ -1,9 +1,13 @@
--- Bootstrap the schema with a table containing create/drop data about all other objects
+-- Manage create/drop data about all other objects in the database
 -- Copyright WyattERP.org; See license in root of this package
+-- ----------------------------------------------------------------------------
+-- Other than wm and create_role, these objects will only exist in the DB if we are in
+-- "development mode."  That means we are making changes to the schema and need to keep
+-- track of which objects to rebuild and when.  Once an official schema release has 
+-- been committed, wyseman will build a pre-campiled schema file that will be used to
+-- create schema for non-developer users.
+-- ----------------------------------------------------------------------------
 -- TODO:
--- X- Find orphaned objects and delete them
--- X- When deleting an item from objects, delete the actual object too
--- X- Is there a way to create /var/tmp/wyseman automatically if it doesn't exist?
 -- X- If two makes run at once, one can overwrite the other's data file in workdir (can tag with unique session ID?)
 -- - Test: Releases > 1 function correctly
 -- - Test: Can't change items part of a prior release
