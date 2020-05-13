@@ -12,3 +12,13 @@ X- Allow user defined hooks on standard controls
 - Tie single digit release number to associated semver release ID?
 - Finish porting ruby run-time
 - 
+- Versioning:
+- Can I get rid of release function and releases table?
+- get rid of object.source.  Let the user prune anything that doesn't show up
+- get rid of object.mod_ver
+- get rid of object.module? (do we care or is the schema really the thing?)
+- do I need objects_v?
+- rename depends_v?
+- 
+- 
+- 

@@ -11,7 +11,24 @@
 #X- List database objects in dependency/tree order (can just do with sql)
 #X- Dump selected, or all tables to text/backup files
 #X- Restore selected or all tables
-#- How to input/update table migration scripts (such as changing column names, adding or deleting columns)
+#X- How to input/update table migration scripts (such as changing column names, adding or deleting columns)
+#- Send file-based migration data to DB each time (how?)
+#- Prune ignores source file--just prunes if we tell it to
+#- Get rid of module/mod_ver
+#- 
+#- JSON view of object table records, including grants
+#- Loader that can read any json insert, including grants
+#- JSON views of data dictionary tables
+#- Maybe current schema should be one file and history be a second file
+#-   Wyseman.schema
+#-   Wyseman.history
+#- Finish all fields of JSON struct in schema file
+#- Loader can also handle history JSON
+#- History has its own hash
+#- How to store history hash in DB so we know we don't need to reload
+#- 
+#- 
+#- 
 #- Manage releases:
 #-   Test: versions > 1 function correctly
 #-   Move SQL output code to a separate module?
@@ -25,10 +42,11 @@
 require 'optparse'
 require 'fileutils'
 require 'csv'
+require 'base64'
 require_relative '../lib/wyseman'
-#require_relative '../lib/wyseman/db'
+require_relative '../lib/wyseman/migrate'
 
-opts = {test:nil, dbname:nil, host:'localhost', port:5432, repl:nil, prune:true, drop:true, post:true, quiet:false, make:true, branch:''}
+opts = {test:nil, dbname:nil, host:'localhost', port:5432, repl:nil, prune:true, drop:true, post:true, quiet:false, make:true, branch:'', migrate:[], work:Dir.pwd}
 
 OptionParser.new do |op|
     op.banner = "Usage: wyseman [opts] source_file(s)"
@@ -43,17 +61,23 @@ OptionParser.new do |op|
     op.on('-d', '--[no-]drop', 'Attempt to drop objects before creating') {|v| opts[:drop] = v}
     op.on('-z', '--[no-]post', 'Run the post-parse cleanup scans (default behavior)') {|v| opts[:post] = v}
     op.on('-b', '--branch=object', 'Include the specified object and all others that depend on it') {|v| opts[:branch] += v + ' '}
-    op.on('-s', '--[no-]sql', 'Write schema creation SQL to stdout') {|v| opts[:sql] = v}
+    op.on('-s', '--[no-]schema', 'Write schema creation SQL to stdout') {|v| opts[:schema] = v}
     op.on('-i', '--[no-]init', 'Write initialization SQL to stdout (as opposed to executing it in the DB)') {|v| opts[:init] = v}
     op.on('-q', '--[no-]quiet', 'Suppress printing of database notices') {|v| opts[:quiet] = v}
+    op.on('-g', '--migrate=command', 'Specify a data migration command') {|v| opts[:migrate] << v}
+    op.on('-w', '--work=dir', 'Work folder (if not cwd)') {|v| opts[:work] = v}
 #    op.on('-t', '--test', 'Show what would happen, but make no actual changes') {opts[:test] = true}
 #    op.on('-n', '--nowarn', "Don't give warnings for dropping populated tables") {opts[:warn] = false}
 #    op.on('-z', '--zz xx', '') {|v| opts[:x] = v}
 end.parse!
 #p 'Opts:',opts; p 'Args:',ARGV			#Debug
 
-#Fixme: turn back on when dump/restore implemented, if we need a local work space
-#FileUtils::mkdir_p opts[:work]			#Make sure working directory exists
+mhandler = Wyseman::Migrate.new(opts[:work])
+if opts[:migrate].length > 0			#Are there migration commands to parse?
+  opts[:migrate].each { |cmd| mhandler.command(cmd.split)}
+  mhandler.finish()
+  exit 0
+end
 
 dbc = Wyseman::DB.new(dbname:opts[:dbname], user:opts[:user], host:opts[:host], port:opts[:port], quiet:opts[:quiet], devel:true)	#Connect to postgres; will make sure bootstrap/ddict exists
 
@@ -84,6 +108,30 @@ if opts[:make]
   end
 end
 
+# -----------------------------------------------------------------------------
+if opts[:schema]				#Generate schema creation SQL on stdout
+
+  bootstrap = Base64.strict_encode64(
+    File.open(File.join(__dir__, '../lib/bootstrap.sql'), 'rb') {|io| io.read}
+  )
+#  if dbc.one("select wm.make(#{brval},#{opts[:drop]},true);")[0].to_i > 0	#Make specified objects
+  schema = {
+    hash: 1234,
+    release: 1,
+    published: 'A date',
+    bootstrap: bootstrap,
+    initialize: 'Init code',
+    dictionary: 'Dictionary code',
+  }
+  
+  schema_text = "--Schema|Release|Date|Hash:\n"
+  schema_text << File.open(File.join(__dir__, '../lib/loader.sql'), 'rb') {|io| io.read}
+  schema_text << 'select wm.loader($schema$' + JSON.pretty_generate(schema) + '$schema$);'
+
+  puts schema_text
+end
+
+#OBSOLETE:
 # -----------------------------------------------------------------------------
 if opts[:sql]					#Generate schema creation SQL on stdout
   schema_sql = "--Schema Creation SQL:\n"
