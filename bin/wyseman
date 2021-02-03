@@ -62,7 +62,7 @@ OptionParser.new do |op|
     op.on('-z', '--[no-]post', 'Run the post-parse cleanup scans (default behavior)') {|v| opts[:post] = v}
     op.on('-b', '--branch=object', 'Include the specified object and all others that depend on it') {|v| opts[:branch] += v + ' '}
     op.on('-s', '--[no-]schema', 'Write schema creation SQL to stdout') {|v| opts[:schema] = v}
-    op.on('-i', '--[no-]init', 'Write initialization SQL to stdout (as opposed to executing it in the DB)') {|v| opts[:init] = v}
+#    op.on('-i', '--[no-]init', 'Write initialization SQL to stdout (as opposed to executing it in the DB)') {|v| opts[:init] = v}
     op.on('-q', '--[no-]quiet', 'Suppress printing of database notices') {|v| opts[:quiet] = v}
     op.on('-g', '--migrate=command', 'Specify a data migration command') {|v| opts[:migrate] << v}
     op.on('-w', '--work=dir', 'Work folder (if not cwd)') {|v| opts[:work] = v}
@@ -70,7 +70,7 @@ OptionParser.new do |op|
 #    op.on('-n', '--nowarn', "Don't give warnings for dropping populated tables") {opts[:warn] = false}
 #    op.on('-z', '--zz xx', '') {|v| opts[:x] = v}
 end.parse!
-#p 'Opts:',opts; p 'Args:',ARGV			#Debug
+p 'Opts:',opts; p 'Args:',ARGV			#Debug
 
 mhandler = Wyseman::Migrate.new(opts[:work])
 if opts[:migrate].length > 0			#Are there migration commands to parse?
@@ -114,21 +114,49 @@ if opts[:schema]				#Generate schema creation SQL on stdout
   bootstrap = Base64.strict_encode64(
     File.open(File.join(__dir__, '../lib/bootstrap.sql'), 'rb') {|io| io.read}
   )
+  
+#  objects = dbc.x("select obj_nam,crt_sql,grants from wm.objects_v_depth where release = wm.release() order by depth,obj_nam").values
+  initialize = post_sql == '' ? nil : Base64.strict_encode64(post_sql)
+
+  dictionary_sql = ''
+  %w{wm.table_text wm.column_text wm.value_text wm.message_text wm.table_style wm.column_style wm.column_native}.each {|tab|
+    flds = dbc.one("select array_to_string(array(select col from wm.column_pub where obj = '#{tab}' order by field),',')")[0]
+#printf("tab:%s flds:%s\n", tab, flds)
+    irows = []
+    res = dbc.x("select #{flds} from #{tab}")
+    dictionary_sql << "insert into #{tab} (#{flds}) values\n" if res.ntuples > 0
+    for i in 0..(res.ntuples-1)
+      row = res[i]
+#printf("row:%s\n",row)
+      icols = []
+      flds.split(',').each {|f|
+#printf(" f:%s col:%s\n", f, row[f])
+        icols << dbc.quote(tab,f,row[f])
+      }
+      irows << ("(" + icols.join(',') + ")")
+    end
+printf("dict:%s\n", dictionary_sql)
+    dictionary_sql << "  " + irows.join(",\n  ") + ";\n\n" if res.ntuples > 0
+  }
+  dictionary = Base64.strict_encode64(dictionary_sql)
+  
 #  if dbc.one("select wm.make(#{brval},#{opts[:drop]},true);")[0].to_i > 0	#Make specified objects
   schema = {
     hash: 1234,
     release: 1,
     published: 'A date',
     bootstrap: bootstrap,
-    initialize: 'Init code',
-    dictionary: 'Dictionary code',
+    initialize: initialize,
+    dictionary: dictionary,
   }
   
   schema_text = "--Schema|Release|Date|Hash:\n"
   schema_text << File.open(File.join(__dir__, '../lib/loader.sql'), 'rb') {|io| io.read}
   schema_text << 'select wm.loader($schema$' + JSON.pretty_generate(schema) + '$schema$);'
+exit 0
 
   puts schema_text
+  exit 0
 end
 
 #OBSOLETE:
@@ -183,8 +211,9 @@ if opts[:sql]					#Generate schema creation SQL on stdout
   puts schema_sql
 end		#opts[:sql]
 
+#Fixme: remove :sql section?
 if post_sql != ''				#Initialization of table data
-  if opts[:init] || opts[:sql]
+  if opts[:sql]
     puts "--Initialization SQL:"
     puts post_sql				#See initialization code on stdout
   else

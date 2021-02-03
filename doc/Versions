@@ -148,7 +148,7 @@ would fail if there is offending data in a table.  As long as such attempts are
 atomic, there should be no harm in the attempt.
 
 Version Migrations could potentially be any arbitrary SQL that must be executed 
-in a transactionimmediately before a drop/create cycle on the table.  However
+in a transaction immediately before a drop/create cycle on the table.  However
 we could simplify things by limiting this to three specific cases where the
 columns of a table change:
 
@@ -204,8 +204,44 @@ Finally, we should probably resign ourselves to the idea that a production DB
 will have to contain wm.objects.  We need a reliable way to know, at least, the
 hash for each instantiated object (if not also its drop/create code).
 
-There is probably no good reason to have a trimmed-down schema (lacking 
+There is probably no compelling reason to have a trimmed-down schema (lacking 
 development components) on a production machine.
+-------------------------------------------------------------------------------
+Data Sources:
+
+There are two basic modes of operation for a WyattERP database.  These need to
+be compatible with each other at all times so we can switch back and forth
+without anything bad happening.
+
+  - Development:
+    - Wyseman CLI is being called directly
+    - Load the bootstrap schema automatically if it doesn't exist
+    - Load objects from Wyseman.history if they are not already loaded
+    - Wait for further calls to wyseman to parse schema description files
+    - When that happens:
+      - Scan in all schema objects
+      - Compare them to what is instantiated in the DB
+      - Drop/replace anything that needs to be updated
+      - Optionally prune any strays left over
+      - Update Wyseman.history file
+      - Update Wyseman.migrate file and data
+  - Production:
+    - Some app is accessing the DB through the Wyseman API
+    - Upon launch, check to see if there is an existing database
+    - If no existing DB:
+      - Populate wm.objects with build data from the schema file
+      - Instantiate all database objects to current spec
+      - Build data dictionary
+      - Initialize all table data
+    - Otherwise (there is an existing DB)
+      - If the DB is newer than our schema file, abort!
+xxxx
+      - Check it's version/checksum
+      - If it is older than our current schema file:
+      - Verify that our instantiated objects match a valid version
+    - If there is no existing database, build it using latest schema file
+    - 
+
 -------------------------------------------------------------------------------
 Strategy:
 
