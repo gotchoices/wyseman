@@ -1,5 +1,10 @@
 Change Log:
 
+1.0.19	2021-Feb
+	- Restructure wyseman.js
+	- Separate connection code from command handler
+	- Add Node.js client module
+
 1.0.18	2020-Apr
 	- Cleanups in preparation for versioning
 	- Persistently save table data on drop/restore
