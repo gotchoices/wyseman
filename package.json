@@ -27,14 +27,15 @@
     "wmdump": "bin/wmdump",
     "wmrestore": "bin/wmrestore",
     "wyseman": "bin/wyseman",
+    "wmmkpkg": "bin/wmmkpkg",
     "wysegi": "bin/wysegi"
   },
   "dependencies": {
     "base64-js": "^1.5.1",
-    "node-fetch": "^2.6.1",
-    "pg": "^8.5.1",
+    "node-fetch": "^2.6.2",
+    "pg": "^8.7.1",
     "pg-format": "^1.0.4",
-    "ws": "^7.4.3"
+    "ws": "^7.5.5"
   },
   "devDependencies": {
     "mocha": "^7.2.0"
