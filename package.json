@@ -31,7 +31,6 @@
     "wysegi": "bin/wysegi"
   },
   "dependencies": {
-    "base64-js": "^1.5.1",
     "node-fetch": "^2.6.2",
     "pg": "^8.7.1",
     "pg-format": "^1.0.4",
