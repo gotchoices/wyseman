@@ -1,5 +1,10 @@
 Change Log:
 
+1.0.21	2021-Nov
+	- Update webpack and other dependencies
+	- Handle encrypted UI connection better
+	- Import/export encrypted connection keys
+
 1.0.19	2021-Feb
 	- Restructure wyseman.js
 	- Separate connection code from command handler
