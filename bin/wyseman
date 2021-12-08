@@ -46,7 +46,13 @@ require 'base64'
 require_relative '../lib/wyseman'
 require_relative '../lib/wyseman/migrate'
 
-opts = {test:nil, dbname:nil, host:'localhost', port:5432, repl:nil, prune:true, drop:true, post:true, quiet:false, make:true, branch:'', migrate:[], work:Dir.pwd}
+opts = {
+  dbname:ENV['WYSEMAN_DB'], 
+  user:ENV['WYSEMAN_USER'], 
+  host:ENV['WYSEMAN_HOST'] || 'localhost', 
+  port:ENV['WYSEMSN_PORT'] || 5432, 
+  repl:nil, test:nil, prune:true, drop:true, post:true, quiet:false, make:true, branch:'', migrate:[]
+}
 
 OptionParser.new do |op|
     op.banner = "Usage: wyseman [opts] source_file(s)"
@@ -194,7 +200,7 @@ if opts[:sql]					#Generate schema creation SQL on stdout
     flds = dbc.one("select array_to_string(array(select col from wm.column_pub where obj = '#{tab}' order by field),',')")[0]
 #printf("tab:%s flds:%s\n", tab, flds)
     irows = []
-    res = dbc.x("select #{flds} from #{tab}")
+    res = dbc.x("select #{flds} from #{tab} order by 1,2,3,4,5")
     schema_sql << "insert into #{tab} (#{flds}) values\n" if res.ntuples > 0
     for i in 0..(res.ntuples-1)
       row = res[i]

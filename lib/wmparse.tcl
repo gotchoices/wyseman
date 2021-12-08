@@ -6,6 +6,8 @@
 #puts "proc hand_object {\n[info body hand_object]\n}"		;#Debug
 
 namespace eval wmparse {
+    set encoding	{utf-8}
+
     variable v
     set v(fname)	{}
     set v(module)	{}
@@ -75,7 +77,7 @@ proc wmparse::parse {fname} {
     if {![lcontain $v(paths) $path]} {lappend v(paths) $path}			;#Keep track of all folders we go into
     
     if {$v(module) == {}} {set v(module) [file rootname [file tail $fname]]}	;#default module name to file name, if none other specified
-    if {[catch {interp eval $v(int) source $fname} errmsg]} {
+    if {[catch {interp eval $v(int) source -encoding $wmparse::encoding $fname} errmsg]} {
         puts "Error in $fname: $::errorCode\n$::errorInfo"
         error "Aborting script: $fname"
     }
