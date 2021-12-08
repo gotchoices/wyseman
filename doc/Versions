@@ -1,8 +1,8 @@
 Schema Version Control
 
 -------------------------------------------------------------------------------
-May 2020
-(May 2020)
+Note (May 2020)
+
 This document is currently a design specification as full version control has
 not yet been implemented in Wyseman.
 
@@ -26,8 +26,7 @@ Wyseman has three fundamental purposes:
   This has not yet been implemented.
 
 -------------------------------------------------------------------------------
-Version Control
-(Feb 2021)
+Version Control (Feb 2021)
 
 The initial approach of the Ruby/JS port (as of 1.0.17) was to rely on a 
 "release" number for each official version of the schema.  This approach has 
@@ -241,13 +240,14 @@ without anything bad happening.
       - Build data dictionary
       - Initialize all table data
     - Otherwise (there is an existing DB)
-      - If the DB is newer than our schema file, abort!
-xxxx
       - Check it's version/checksum
+      - If the DB is newer than our schema file, abort!
+      - If the DB matches our schema file, proceed
       - If it is older than our current schema file:
-      - Verify that our instantiated objects match a valid version
-    - If there is no existing database, build it using latest schema file
-    - 
+        - Prepare an SQL transaction to upgrade
+        - Try executing it
+        - If it succeeds, proceed as normal
+        - If it fails, generate logging information about the failure
 
 -------------------------------------------------------------------------------
 Strategy:
