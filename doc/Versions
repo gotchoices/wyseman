@@ -2,8 +2,9 @@ Schema Version Control
 
 -------------------------------------------------------------------------------
 May 2020
-This document is an attempt at a design specification for full version control,
-which has not yet been implemented in Wyseman.
+(May 2020)
+This document is currently a design specification as full version control has
+not yet been implemented in Wyseman.
 
 Objectives:
 -------------------------------------------------------------------------------
@@ -26,6 +27,7 @@ Wyseman has three fundamental purposes:
 
 -------------------------------------------------------------------------------
 Version Control
+(Feb 2021)
 
 The initial approach of the Ruby/JS port (as of 1.0.17) was to rely on a 
 "release" number for each official version of the schema.  This approach has 
@@ -162,10 +164,11 @@ table--just enough so the data will dump/restore to the right columns.
 
 The additional benefit is we could conceivably reverse the process if we ever
 wanted to revert to a prior version.  Not sure if this is ever needed.  If not,
-then the "add x" variant is not really needed.
+then the "add x" variant is not really needed.  Initially, let us attempt to 
+apply drop and rename migrations and track them in our meta schema.
 
-So initially, let us attempt to apply drop and rename migrations and track them
-in our meta schema.
+Our meta schema will need to have provisions for storing and maintaining these
+along with the tables they belong to.
 
 -------------------------------------------------------------------------------
 History:
@@ -191,6 +194,10 @@ commands, in order, that have not yet been executed.  If successful, the table
 will have been properly modified, so we can move forward with our work.  If it 
 fails for some reason, we will need a way to pop and/or edit the command or 
 perhaps push other additional commands before trying again.
+
+When accessed, these objects will get integrated into the history file as well.
+The developer will then have to remove the file they were contained in (or make
+sure not to parse it again).
 
 Once the schema release is committed, our list of migration commands should be
 locked, saved, and become a permanent part of Wyseman.history.  This is likely 
