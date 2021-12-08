@@ -1,7 +1,7 @@
 Schema Version Control
 
 -------------------------------------------------------------------------------
-May 2020
+(May 2020)
 This document is currently a design specification as full version control has
 not yet been implemented in Wyseman.
 
@@ -26,6 +26,7 @@ Wyseman really has three fundamental purposes:
 
 -------------------------------------------------------------------------------
 Version Control
+(Feb 2021)
 
 The initial approach of the Ruby/JS port (as of 1.0.17) was to have a "release"
 number for each official version of the schema.  This approach has several
@@ -133,7 +134,7 @@ manually changed before there is any hope of upgrading versions.
 Version Migrations are any arbitrary SQL that must be executed in a transaction
 immediately before a drop/create cycle on the table.
 
-Our meta schema will have to have provisions for storing and maintaining these
+Our meta schema will need to have provisions for storing and maintaining these
 along with the tables they belong to.
 
 -------------------------------------------------------------------------------
@@ -153,7 +154,7 @@ records that don't pass muster for new table constraints.
 
 The tabmod will contain any amount of SQL modification code required.
 
-When accessed, these objects will get integrated into the history file as well
+When accessed, these objects will get integrated into the history file as well.
 The developer will then have to remove the file they were contained in (or make
 sure not to parse it again).
 
@@ -166,6 +167,6 @@ one version to the next.
 Bootstrap Schema:
 
 Finally, we should probably resign ourselves to the idea that a production DB
-will have to contain wm.objects.  There needs to be a way to know, at least, the
-version ad hash for each intantiated object (if not also its create code).
+will have to contain wm.objects.  There needs to be a way to know, at least, 
+the version and hash for each intantiated object (if not also its create code).
 -------------------------------------------------------------------------------
