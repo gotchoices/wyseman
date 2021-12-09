@@ -4,6 +4,14 @@
 // -----------------------------------------------------------------------------
 //TODO:
 //X- Port to node
+//- Specify file with -s switch
+//- Split sql schema component functions
+//- Still outputs the same
+//- Write new schema file format
+//- Switch to output old format (mostly for debugging schema)
+//- Switch to list dependency report?
+//- Option to check dependencies against DB's opinion (if it has one)?
+//- 
 //- Try building schema on blank database
 //- Make regression tests run properly
 //- Why does tty blank out when node process dies in the middle
@@ -32,32 +40,19 @@ const Env = process.env
 
 var opts = require('yargs')
   .alias('?', 'help')	.default('help', false, 'Show help message')	//{STDERR.puts opts; exit}
-  .alias('n', 'dbname')	.default('dbname',	Env.WYSEMAN_DB,
- 	'Specify the database name explicitly (rather than defaulting to the username)')
-  .alias('h', 'host')	.default('host',	Env.WYSEMAN_HOST || 'localhost',
-  	'Specify the database host name explicitly (rather than defaulting to the local system)')
-  .alias('P', 'port')	.default('port',	Env.WYSEMAN_PORT || 5432,
-  	'Specify the database port explicitly (rather than defaulting to 5432)')
-  .alias('u', 'user')	.default('user',	Env.WYSEMAN_USER || 'admin',
-  	'Specify the database user name explicitly (rather than defaulting to the username)')
-  .alias('r', 'replace').boolean('replace').default('replace',	false,
-  	'Replace views/functions where possible')
-  .alias('b', 'branch')	.default('branch',	'',
-  	'Include the specified object and all others that depend on it')
-  .alias('m', 'make')	.boolean('make').default('make',	true,
-  	'Build any uninstantiated objects in the database')
-  .alias('p', 'prune')	.boolean('make').default('prune',	true,
-  	'Remove any objects no longer in the source file(s)')
-  .alias('d', 'drop')	.boolean('drop').default('drop',	true,
-  	'Attempt to drop objects before creating')
-  .alias('z', 'post')	.boolean('post').default('post',	true,
-  	'Run the post-parse cleanup scans (default behavior)')
-  .alias('s', 'sql')	.boolean('sql').default('sql',		false,
-  	'Write schema creation SQL to stdout')
-  .alias('i', 'init')	.boolean('init').default('init',	false,
-  	'Write initialization SQL to stdout (as opposed to executing it in the DB)')
-  .alias('q', 'quiet')	.boolean('quiet').default('quiet',	false,
-  	'Suppress printing of database notices')
+  .alias('n', 'dbname')	.default('dbname',	Env.WYSEMAN_DB,			'Specify the database name explicitly (rather than defaulting to the username)')
+  .alias('h', 'host')	.default('host',	Env.WYSEMAN_HOST || 'localhost','Specify the database host name explicitly (rather than defaulting to the local system)')
+  .alias('P', 'port')	.default('port',	Env.WYSEMAN_PORT || 5432,	'Specify the database port explicitly (rather than defaulting to 5432)')
+  .alias('u', 'user')	.default('user',	Env.WYSEMAN_USER || 'admin',	'Specify the database user name explicitly (rather than defaulting to the username)')
+  .alias('b', 'branch')	.default('branch',	'',				'Include the specified object and all others that depend on it')
+  .alias('r', 'replace').boolean('replace').default('replace',	false,	'Replace views/functions where possible')
+  .alias('m', 'make')	.boolean('make').default('make',	true,	'Build any uninstantiated objects in the database')
+  .alias('p', 'prune')	.boolean('make').default('prune',	true,	'Remove any objects no longer in the source file(s)')
+  .alias('d', 'drop')	.boolean('drop').default('drop',	true,	'Attempt to drop objects before creating')
+  .alias('z', 'post')	.boolean('post').default('post',	true,	'Run the post-parse cleanup scans (default behavior)')
+  .alias('i', 'init')	.boolean('init').default('init',	false,	'Write initialization SQL to stdout (as opposed to executing it in the DB)')
+  .alias('q', 'quiet')	.boolean('quiet').default('quiet',	false,	'Suppress printing of database notices')
+  .alias('s', 'sql')
   .argv
 var argv = opts._
 //console.log("opts:", opts, "argv:", argv)			//Debug
@@ -70,7 +65,7 @@ var dbc = new DbClient({			//Will connect using standard lib first
   user: opts.user,
 })
 dbc.connect(() => {
-  let postSql = ''
+  let initSql = ''
     , db = new DbSync(opts)			//Now connect synchronously
     , branchVal = 'null'
     , wm = new Parser(db)			//Initialize the schema parser
@@ -78,58 +73,73 @@ dbc.connect(() => {
   if (argv.length > 0) {			//If there are files to process
     for (let file of argv) {
       let sql = wm.parse(file)			//Accumulate sql commands for later
-      postSql += sql
+      initSql += sql
     }
   }	//parse files
 
 //console.log('prune:', opts.prune, 'post:', opts.post)
-  if (opts.post) {
-    wm.check(opts.prune)			//And do post-cleanup
+  if (opts.post) wm.check(opts.prune)		//And do post-cleanup
 
-    if (opts.branch != '') {			//If branches specified
-      brval = "'{" + opts.branch.trim().split(' ').join(',') + "}'"
-    }
 //console.log('Make:', opts.make, 'Drop:', opts.drop)
 
     //Instantiate specified, or default objects in the database, with optional pre-drop
-    if (opts.make) {
-      let res = db.one(`select wm.make(${branchVal},${opts.drop},true);`)	//Make specified objects
+  if (opts.make) {				//Are branches specified
+    let branchVal = (opts.branch == '') ? null : "'{" + opts.branch.trim().split(' ').join(',') + "}'"
+      , res = db.one(`select wm.make(${branchVal},${opts.drop},true);`)	//Make specified objects
 //console.log("make:", res)
-      if (parseInt(res.make) > 0) {
-        db.x("select wm.init_dictionary();")			//Re-initialize dictionary
-      }
-    }		//make
+    if (parseInt(res.make) > 0) {
+      db.x("select wm.init_dictionary();")		//Re-initialize dictionary
+    }
+  }		//make
+
+  if (opts.init && initSql != '') {
+    console.error("Running Initialization SQL")
+    db.x(initSql)
+  }
+  
+console.log("s:", opts.s, !!opts.s, opts.s == true)
+  if (!!opts.s) {					//Got some form of -s switch
+    let outStream = process.stdout
+    
+    if (opts.s != true) {				//Looks like output file specified
+console.log("outFile:", opts.s)
+      outStream = Fs.createWriteStream(opts.s)
+    }
 
     if (opts.sql) {					//Generate schema creation SQL on stdout
+      console.log(bootSql(db))
       console.log(schemaSql(db))
+      console.log(dictSql(db))
     }
     
-    if (postSql != '') {
-      if (opts.init || opts.sql) {
-        console.log("--Initialization SQL:")
-        console.log(postSql)			//See initialization code on stdout
-      } else {
-        console.error("Running Initialization SQL")
-        db.x(postSql)
-      }
-    }		//postSQL
-  }		//opts.post
+    if (initSql != '') {
+      console.log("--Initialization SQL:")
+      console.log(initSql)			//See initialization code on stdout
+    }
+  }		//opts.s
+
   dbc.disconnect()				//Disconnect async connection
   process.exit(0);				//Die nicely (and reset the tty)
 })
 
-// Build schema creation SQL
+// Build schema bootstrap SQL
 // -----------------------------------------------------------------------------
-var schemaSql = function (db) {
-  let sql = "--Schema Creation SQL:\n"
+var bootSql = function (db) {
+  let sql = "--Schema Bootstrap:\n"
     , version = db.one("select wm.release();").release
-    , roles = []
   
   sql += Fs.readFileSync(Path.join(__dirname, '../lib/boot.sql')).toString()
 
   sql += `create or replace function wm.release() returns int stable language sql as $$
   select ${version};\n$$;\n`
+  return sql
+}
   
+// Build schema creation SQL
+// -----------------------------------------------------------------------------
+var schemaSql = function (db) {
+  let sql = ''
+    , roles = []
   db.x("select obj_nam,crt_sql,grants from wm.objects_v_depth where release = wm.release() order by depth,obj_nam").forEach(row => {
      sql += row.crt_sql + "\n"
 //console.log("gr:", Array.isArray(row.grants), row.grants)
@@ -146,8 +156,13 @@ var schemaSql = function (db) {
        sql += `grant ${priv} on ${otyp} ${onam} to ${perm};\n`
      })
   })
+  return sql
+}
 
-  sql += "\n--Data Dictionary:\n"
+// Build data dictionary SQL
+// -----------------------------------------------------------------------------
+var dictSql = function (db) {
+  let sql = "\n--Data Dictionary:\n"
   ;['wm.table_text','wm.column_text','wm.value_text','wm.message_text','wm.table_style','wm.column_style','wm.column_native'].forEach(tab => {
     let flds = db.one(`select array_to_string(array(select col from wm.column_pub where obj = '${tab}' order by field),',') as flds`).flds
 //console.log('tab:', tab, 'flds:', flds)
