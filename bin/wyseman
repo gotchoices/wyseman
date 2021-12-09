@@ -51,7 +51,7 @@ opts = {
   user:ENV['WYSEMAN_USER'], 
   host:ENV['WYSEMAN_HOST'] || 'localhost', 
   port:ENV['WYSEMSN_PORT'] || 5432, 
-  repl:nil, test:nil, prune:true, drop:true, post:true, quiet:false, make:true, branch:'', migrate:[]
+  repl:nil, test:nil, prune:true, drop:true, post:true, quiet:false, make:true, branch:'', migrate:[], work:Dir.pwd
 }
 
 OptionParser.new do |op|
@@ -76,7 +76,7 @@ OptionParser.new do |op|
 #    op.on('-n', '--nowarn', "Don't give warnings for dropping populated tables") {opts[:warn] = false}
 #    op.on('-z', '--zz xx', '') {|v| opts[:x] = v}
 end.parse!
-p 'Opts:',opts; p 'Args:',ARGV			#Debug
+#p 'Opts:',opts; p 'Args:',ARGV			#Debug
 
 mhandler = Wyseman::Migrate.new(opts[:work])
 if opts[:migrate].length > 0			#Are there migration commands to parse?
@@ -141,7 +141,7 @@ if opts[:schema]				#Generate schema creation SQL on stdout
       }
       irows << ("(" + icols.join(',') + ")")
     end
-printf("dict:%s\n", dictionary_sql)
+#printf("dict:%s\n", dictionary_sql)
     dictionary_sql << "  " + irows.join(",\n  ") + ";\n\n" if res.ntuples > 0
   }
   dictionary = Base64.strict_encode64(dictionary_sql)
@@ -159,7 +159,7 @@ printf("dict:%s\n", dictionary_sql)
   schema_text = "--Schema|Release|Date|Hash:\n"
   schema_text << File.open(File.join(__dir__, '../lib/loader.sql'), 'rb') {|io| io.read}
   schema_text << 'select wm.loader($schema$' + JSON.pretty_generate(schema) + '$schema$);'
-exit 0
+#exit 0
 
   puts schema_text
   exit 0

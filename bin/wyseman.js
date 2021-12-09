@@ -115,6 +115,7 @@ dbc.connect(() => {
     }		//postSQL
   }		//opts.post
   dbc.disconnect()				//Disconnect async connection
+  process.exit(0);				//Die nicely (and reset the tty)
 })
 
 // Build schema creation SQL

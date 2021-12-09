@@ -1,9 +1,28 @@
 Wyseman TODO
-X- Implement preferred display columns per view
-X- Implement preferred display order per view
-X- Implement custom (user defined) control layer
-X- Allow user defined hooks on standard controls
-- Separate run-time scripts to separate wyclif module (Control Layer InterFace)
+- Advance new node wyseman to produce new schema format file
+-   Can produce file for any specified version?
+- Add delta column to wm.objects table
+- Add hash column to wm.objects table
+- Make JSON (writable) view over wm.objects
+- Revert ruby wyseman back to old baseline behavior
+- Make module to accept/edit/process migration deltas
+- Wyseman maintains Wyseman.delta file(s)	(or: .sourceFile.wmm)
+- Wyseman maintains Wyseman.hist file(s)	(or: .sourceFile.wmh)
+- 
+- Make runtime handler to (also) use new schema file format
+-  Can produce a straight sql file from the necessary parts (for new DB)
+-  Can produce Sql to populate wm.objects and instantiate schema from there
+-  Can produce delta script from any version to any other
+- 
+- Pgplsql make routine applies deltas from last committed table form
+- 
+- Implement (sql and wyseman CLI) command for committing/locking a schema version
+- Switch over to new wyseman for mainstream development
+- Start committing schema versions in mychips
+- 
+- 
+- OLD:
+?- Separate run-time scripts to separate wyclif module (Control Layer InterFace)
 - Implement/store table modification microscripts where drop/create won't do
 -  When a table column is removed or renamed, the old data won't import (have to manually rename first)
 -  When a new constraint is added, the old data may not fit anymore.  May have to filter it.

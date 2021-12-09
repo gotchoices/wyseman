@@ -1,7 +1,7 @@
 Schema Version Control
 
 -------------------------------------------------------------------------------
-Note (May 2020)
+(May 2020)
 
 This document is currently a design specification as full version control has
 not yet been implemented in Wyseman.
@@ -26,7 +26,7 @@ Wyseman has three fundamental purposes:
   This has not yet been implemented.
 
 -------------------------------------------------------------------------------
-Version Control (Feb 2021)
+Version Control (Dec 2021)
 
 The initial approach of the Ruby/JS port (as of 1.0.17) was to rely on a 
 "release" number for each official version of the schema.  This approach has 
@@ -60,22 +60,24 @@ several problems:
   
 These issues seem to lead to the conclusion that every object should somehow
 deal with its own version control.  If every object could be uniquely 
-identified by a hash of its:
+identified by its:
 
+  - Object type
+  - Object name
+  - Object version number
+
+Then we could also record a hash of its contents, to also include (at least):
   - Create code
   - Dependencies
   - Grants
-  - Version number
-
-we could be pretty confident, the current object is the one we want.
 
 Then, the notion of a "release" could consist of a manifest of all the objects 
-that belong in that given release, along with their hashes.  This seems to 
-simplify a number of issues.
+that belong in that given release, along with their versions and hashes.  This 
+seems to simplify a number of issues.
 
-Now a component has no sequential version number, per se.  We just know it 
-could get modified.  And we will take steps to make sure the version of it we
-are interested in is the one we have in our present release.
+Now a component can record an individual history of its changes, how to
+migrate forward into new versions of the schema, and perhaps even how to revert
+back to previous versions.
 
 Some remaining potential pitfalls:
 
@@ -149,69 +151,65 @@ would fail if there is offending data in a table.  As long as such attempts are
 atomic, there should be no harm in the attempt.
 
 Version Migrations could potentially be any arbitrary SQL that must be executed 
-in a transaction immediately before a drop/create cycle on the table.  However
-we could simplify things by limiting this to three specific cases where the
-columns of a table change:
+in a transaction immediately before a drop/create cycle on the table.  It will
+simplify things to limit this to a few specific cases where table columns have 
+been changed:
 
-  - drop w
-  - add x
-  - rename y to z
+  - add column w		(initialization expression)
+  - drop column x		(revert expression)
+  - rename column y to z
+  - update column expresson	(optional revert expression)
 
-From this abstraction we could easily generate SQL to alter the table, just
+From this abstraction we could likely generate SQL to alter the table, just
 prior ot the drop/create.  We don't need to affect every possible change to the
-table--just enough so the data will dump/restore to the right columns.
-
-The additional benefit is we could conceivably reverse the process if we ever
-wanted to revert to a prior version.  Not sure if this is ever needed.  If not,
-then the "add x" variant is not really needed.  Initially, let us attempt to 
-apply drop and rename migrations and track them in our meta schema.
+table--just enough so the data will dump and then restore properly.
 
 Our meta schema will need to have provisions for storing and maintaining these
-along with the tables they belong to.
+operations associated with the tables they belong to.  The operations also must
+be stored in the order they were created, and are expected to be applied.
 
 -------------------------------------------------------------------------------
-History:
+History / Migration:
 
-It is proposed that Wyseman generate a file in the application schema folder
-called Wyseman.history.  This file would hold a structure containing all 
-objects a part of prior release commits, but not represented in the set of 
-schema files (whether specific to the app, or drawn from any external schema 
-libraries).
+Wyseman will maintain a file in the application schema folder(s), perhaps
+called Wyseman.hist.  This file holds a structure containing the raw SQL
+information (what is in wm.objects) about all objects part of prior release 
+commits, but not representing any current changes in the associated schema 
+files.
 
-We will then create a new command line switch to wyseman to accept a table
-migration command (drop or rename).  This command would be pushed onto a stack
-contained in another new file, Wyseman.migrate, and associated with the table
-it belongs to.
+We will create a new command line switch to wyseman to accept a table
+migration command (delta) such as add, drop, rename, or update).  This command 
+will be pushed onto a stack contained in the database and associated with the
+table it belongs to.  Wyseman will also maintan a backup of this delta
+information in a file Wyseman.delta.  If the database is destroyed, the
+current working deltas can be restored from that file.
 
-Each time wyseman is run, it should consult Wyseman.migrate and load all
-migration stacks into the database, noting for new ones that they have not yet
-been executed.  Each stack will be stored relational to the applicable table
-in wm.objects.
+Each time wyseman rebuilds a table, it will:
+  - If the table contains no data, complain and abort
+  - Apply all the past operations in reverse (i.e. revert) to attempt to get
+    the data back to typical for the last-committed version of the table
+  - Then try applying all deltas in forward order, including the new ones
+  - Attempt a dump/restore on the table
+  - Then dump/restore the table
+If that fails, the developer will need to edit the deltas until it succeeds.
 
-On the next drop/create cycle for a given table, we will first invoke any
-commands, in order, that have not yet been executed.  If successful, the table
-will have been properly modified, so we can move forward with our work.  If it 
-fails for some reason, we will need a way to pop and/or edit the command or 
-perhaps push other additional commands before trying again.
+Once a new schema release is committed, our list of migration commands should 
+be locked, saved, and become a permanent part of the object, and recorded in
+Wyseman.hist.
 
-When accessed, these objects will get integrated into the history file as well.
-The developer will then have to remove the file they were contained in (or make
-sure not to parse it again).
-
-Once the schema release is committed, our list of migration commands should be
-locked, saved, and become a permanent part of Wyseman.history.  This is likely 
-only applicable if the release being committed is >= 2.  Anyone deploying an 
-app that uses release 1 should not be presumed to have any pre-existing data.
+We should be able to re-create the history file at any time from the locked
+object versions contained in the database.  And we should also be able to 
+populate an empty database from a valid history (and delta) file.
 
 -------------------------------------------------------------------------------
 Bootstrap Schema:
 
 Finally, we should probably resign ourselves to the idea that a production DB
-will have to contain wm.objects.  We need a reliable way to know, at least, the
-hash for each instantiated object (if not also its drop/create code).
+will have to contain the wm.objects table.  We need a reliable way to know, at 
+least, the hash for each instantiated object, if not also its drop/create code.
 
-There is probably no compelling reason to have a trimmed-down schema (lacking 
-development components) on a production machine.
+There is probably no compelling reason to require a trimmed-down schema 
+(lacking development components) in a production database.
 -------------------------------------------------------------------------------
 Data Sources:
 
@@ -220,17 +218,20 @@ be compatible with each other at all times so we can switch back and forth
 without anything bad happening.
 
   - Development:
-    - Wyseman CLI is being called directly
+    - The schema is under active development/modification
+    - The wyseman CLI is being called to deploy changes
     - Load the bootstrap schema automatically if it doesn't exist
-    - Load objects from Wyseman.history if they are not already loaded
+    - Load older objects from Wyseman.hist if they are not already loaded
     - Wait for further calls to wyseman to parse schema description files
     - When that happens:
       - Scan in all schema objects
       - Compare them to what is instantiated in the DB
       - Drop/replace anything that needs to be updated
       - Optionally prune any strays left over
-      - Update Wyseman.history file
-      - Update Wyseman.migrate file and data
+      - Update Wyseman.hist file
+      - Update Wyseman.delta file and data
+    - Allow to commit new release versions
+
   - Production:
     - Some app is accessing the DB through the Wyseman API
     - Upon launch, check to see if there is an existing database
@@ -243,14 +244,57 @@ without anything bad happening.
       - Check it's version/checksum
       - If the DB is newer than our schema file, abort!
       - If the DB matches our schema file, proceed
-      - If it is older than our current schema file:
+      - If the DB is older than our current schema file:
         - Prepare an SQL transaction to upgrade
         - Try executing it
         - If it succeeds, proceed as normal
-        - If it fails, generate logging information about the failure
+        - If it fails, abort & generate logging information about the failure
 
 -------------------------------------------------------------------------------
 Strategy:
+
+Instead of a schema file that is straight SQL create code, the following JSON
+file format is proposed:
+
+{
+  current: {
+    hash:	"Hash of whole release",
+    release:	Release_number,
+    publish:	"Published Date (null if work-in-process)",
+    boot:	"Encoded bootstrap SQL",
+    dict:	"Encoded SQL to delete/insert data dictionary tables",
+    init:	"Encoded application schema initialization SQL",
+    objects: [			//All objects in current release
+      obj1: {
+        hash:		"ABC...",
+        type:		"View, table, etc",
+        name:		"Object name",
+        version:	N,
+        deps:		[dependencies],
+        grants:		[grants],
+        column:		[view column data],		//Views only
+        create:		"Encoded Sql create code",
+        drop:		"Encoded Sql drop code",
+        delta:		[{oper 1}, {oper 2}, ...]	//Tables only
+        first:		Minimum_release,
+        last:		Maximum_release
+      },
+      obj2:	{Object record as above},
+      ...
+    ],
+  },
+  history: [		/All objects from past releases
+    obj1:	{Object record as above},
+    obj2:	{Object record as above},
+    ...
+  ]
+}
+
+A schema file of this format should contain enough information to build a new, 
+empty schema of the current version, or (assuming the history property is 
+present) to upgrade an existing database from any version up to the current.
+-------------------------------------------------------------------------------
+Strategy (OLDER, OBSOLETE):
 
 Instead of a schema file that is straight SQL create code, the following file
 format is proposed:
