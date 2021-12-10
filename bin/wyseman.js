@@ -4,12 +4,15 @@
 // -----------------------------------------------------------------------------
 //TODO:
 //X- Port to node
-//- Specify file with -s switch
-//- Split sql schema component functions
-//- Still outputs the same
-//- Write new schema file format
-//- Switch to output old format (mostly for debugging schema)
-//- Switch to list dependency report?
+//X- Specify file with -s switch
+//X- Split sql schema component functions
+//X- Still outputs the same
+//X- Write new schema file format
+//X- Switch to output old format (mostly for debugging schema)
+//X- Switch to generate dependency report?
+//- Output correct version
+//- Generate schema hash?
+//- 
 //- Option to check dependencies against DB's opinion (if it has one)?
 //- 
 //- Try building schema on blank database
@@ -34,6 +37,7 @@ const DbSync = require('../lib/dbsync.js')
 const Parser = require('../lib/parser.js')
 const Format = require('pg-format')
 const Path = require('path')
+const Zlib = require('zlib')
 const Fs = require('fs')
 const Pg = require('pg-native')
 const Env = process.env
@@ -52,6 +56,7 @@ var opts = require('yargs')
   .alias('z', 'post')	.boolean('post').default('post',	true,	'Run the post-parse cleanup scans (default behavior)')
   .alias('i', 'init')	.boolean('init').default('init',	false,	'Write initialization SQL to stdout (as opposed to executing it in the DB)')
   .alias('q', 'quiet')	.boolean('quiet').default('quiet',	false,	'Suppress printing of database notices')
+  .alias('l', 'list')	.boolean('list').default('list',	false,	'List DB objects and their dependencies')
   .alias('s', 'sql')
   .argv
 var argv = opts._
@@ -69,6 +74,11 @@ dbc.connect(() => {
     , db = new DbSync(opts)			//Now connect synchronously
     , branchVal = 'null'
     , wm = new Parser(db)			//Initialize the schema parser
+
+  if (opts.list) {
+    let deplist = db.x("select depth,object,deps from wm.objects_v_depth order by depth,deps")
+    console.log("Objects:", JSON.stringify(deplist, null, 2))
+  }
   
   if (argv.length > 0) {			//If there are files to process
     for (let file of argv) {
@@ -97,35 +107,50 @@ dbc.connect(() => {
     db.x(initSql)
   }
   
-console.log("s:", opts.s, !!opts.s, opts.s == true)
+//console.log("s:", opts.s, !!opts.s, opts.s == true)
   if (!!opts.s) {					//Got some form of -s switch
-    let outStream = process.stdout
+    let output = process.stdout
+      , boot = bootSql(db)
+      , schema = schemaSql(db)
+      , dict = dictSql(db)
     
-    if (opts.s != true) {				//Looks like output file specified
-console.log("outFile:", opts.s)
-      outStream = Fs.createWriteStream(opts.s)
-    }
+    if (opts.s == true) {				//Show debug output
+      output.write("--Bootstrap:\n" + bootSql(db))
+      output.write("\n--Schema:\n" + schemaSql(db))
+      output.write("\n--Data Dictionary:\n" + dictSql(db))
+      output.write((initSql == '') ? '' : ("\n--Initialization:\n" + initSql))
 
-    if (opts.sql) {					//Generate schema creation SQL on stdout
-      console.log(bootSql(db))
-      console.log(schemaSql(db))
-      console.log(dictSql(db))
+    } else {		   				//Output file specified
+//console.log("outFile:", Path.normalize(opts.s))
+      output = Fs.createWriteStream(Path.normalize(opts.s))
+      output.write(JSON.stringify({
+        hash: 1234,
+        release: 1,
+        publish: new Date().toISOString(),
+        boot:	compress(bootSql(db)),
+        schema:	compress(schemaSql(db)),
+        init:	compress(initSql),
+        dict:	compress(dictSql(db)),
+      }, null, 2))
     }
-    
-    if (initSql != '') {
-      console.log("--Initialization SQL:")
-      console.log(initSql)			//See initialization code on stdout
-    }
+    output.end()
+
   }		//opts.s
 
   dbc.disconnect()				//Disconnect async connection
-  process.exit(0);				//Die nicely (and reset the tty)
+//  process.exit(0);				//Die nicely (and reset the tty)
 })
 
 // Build schema bootstrap SQL
 // -----------------------------------------------------------------------------
-var bootSql = function (db) {
-  let sql = "--Schema Bootstrap:\n"
+const compress = function (str) {
+  return Zlib.deflateSync(Buffer.from(str)).toString('base64')
+}
+
+// Build schema bootstrap SQL
+// -----------------------------------------------------------------------------
+const bootSql = function (db) {
+  let sql = ''
     , version = db.one("select wm.release();").release
   
   sql += Fs.readFileSync(Path.join(__dirname, '../lib/boot.sql')).toString()
@@ -137,7 +162,7 @@ var bootSql = function (db) {
   
 // Build schema creation SQL
 // -----------------------------------------------------------------------------
-var schemaSql = function (db) {
+const schemaSql = function (db) {
   let sql = ''
     , roles = []
   db.x("select obj_nam,crt_sql,grants from wm.objects_v_depth where release = wm.release() order by depth,obj_nam").forEach(row => {
@@ -161,8 +186,8 @@ var schemaSql = function (db) {
 
 // Build data dictionary SQL
 // -----------------------------------------------------------------------------
-var dictSql = function (db) {
-  let sql = "\n--Data Dictionary:\n"
+const dictSql = function (db) {
+  let sql = ''
   ;['wm.table_text','wm.column_text','wm.value_text','wm.message_text','wm.table_style','wm.column_style','wm.column_native'].forEach(tab => {
     let flds = db.one(`select array_to_string(array(select col from wm.column_pub where obj = '${tab}' order by field),',') as flds`).flds
 //console.log('tab:', tab, 'flds:', flds)
@@ -180,8 +205,7 @@ var dictSql = function (db) {
 //console.log(' i:', icols)
       irows.push("(" + icols.join(',') + ")")
     }
-    if (irows.length > 0) {sql += "  " + irows.join(",\n  ") + ";\n\n"}
+    if (irows.length > 0) {sql += "  " + irows.join(",\n  ") + ";\n"}
   })
-
   return sql
 }
