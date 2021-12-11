@@ -155,14 +155,15 @@ in a transaction immediately before a drop/create cycle on the table.  It will
 simplify things to limit this to a few specific cases where table columns have 
 been changed:
 
-  - add column w		(initialization expression)
+  - add column w sql_spec	(initialization expression)
   - drop column x		(revert expression)
-  - rename column y to z
+  - rename column y z
   - update column expresson	(optional revert expression)
 
 From this abstraction we could likely generate SQL to alter the table, just
 prior ot the drop/create.  We don't need to affect every possible change to the
-table--just enough so the data will dump and then restore properly.
+table--just enough so the old data can dump and then restore back into the new
+table properly.
 
 Our meta schema will need to have provisions for storing and maintaining these
 operations associated with the tables they belong to.  The operations also must
@@ -171,31 +172,53 @@ be stored in the order they were created, and are expected to be applied.
 -------------------------------------------------------------------------------
 History / Migration:
 
-Wyseman will maintain a file in the application schema folder(s), perhaps
-called Wyseman.hist.  This file holds a structure containing the raw SQL
-information (what is in wm.objects) about all objects part of prior release 
-commits, but not representing any current changes in the associated schema 
-files.
+Wyseman will maintain files in the application schema folder(s)--perhaps a
+hidden file for each source file: .<source>.wmh (wyseman history).  This file 
+holds a JSON structure containing the raw SQL information (what is in 
+wm.objects) about all objects part of prior release commits, but not 
+representing any current changes in the associated schema file.
 
 We will create a new command line switch to wyseman to accept a table
-migration command (delta) such as add, drop, rename, or update).  This command 
-will be pushed onto a stack contained in the database and associated with the
-table it belongs to.  Wyseman will also maintan a backup of this delta
-information in a file Wyseman.delta.  If the database is destroyed, the
-current working deltas can be restored from that file.
+migration operation (delta) such as add, drop, rename, or update).  This
+operation will be pushed onto a stack contained another hidden file called
+".source.wmg".  The user will also have the ability to simply add delta
+operations to that file by hand if they feel comfortable doing so.
 
-Each time wyseman rebuilds a table, it will:
-  - If the table contains no data, complain and abort
-  - Apply all the past operations in reverse (i.e. revert) to attempt to get
-    the data back to typical for the last-committed version of the table
-  - Then try applying all deltas in forward order, including the new ones
+Examples of table migration commands:
+  - wyseman -g "trees add species 'text' maple"
+  - wyseman -g "my.table add address 'text not null' ''"
+  - wyseman -g "s.parts drop version 'int not null' 1"
+  - wyseman -g "base.contacts rename cell mobile"
+  - wyseman -g "items update status '\'closed\' where isnull'"
+
+You can also specify the migration specification as the JSON it will end 
+up getting translated to:
+  - wyseman -g "{tab:'trees', oper:'add', col:'species', spec:'text' init:'maple'}"
+  - wyseman -g "{tab:'contacts' oper:'rename' col:'cell' spec:'mobile'}"
+
+Each time wyseman rebuilds a table, it will check to see if there are new
+migration operations in the filesystem that are not yet in the database.  
+If so, it will:
+  - Check if the table contains no data, complain and abort (as this may not 
+    be the case for others who will run the migration).
+  - Apply the new migration operations to the table
   - Attempt a dump/restore on the table
-  - Then dump/restore the table
-If that fails, the developer will need to edit the deltas until it succeeds.
+  - Append the new operations to the table record in wm.objects (to indicate
+    that these delta's have been applied)
+
+In addition to providing operations to the -g switch, you can give the 
+following commands (pseudo operations):
+  - "table list"	List out the migration commands for this table, 
+  			showing what has and has not yet been deployed
+  - "table edit"	Edit the migration file for this table
+  - "table pop"		Un-apply the last deployed migration and remove
+  			it from the stack in the database.  Mark as dirty.
+  - "table reset"	Un-apply all deployed migrations and remove them
+  			from the stack in the database.  Mark as dirty.
 
 Once a new schema release is committed, our list of migration commands should 
-be locked, saved, and become a permanent part of the object, and recorded in
-Wyseman.hist.
+get locked down and become a permanent part of the object, and recorded in
+the associated history file.
 
 We should be able to re-create the history file at any time from the locked
 object versions contained in the database.  And we should also be able to 
@@ -204,12 +227,14 @@ populate an empty database from a valid history (and delta) file.
 -------------------------------------------------------------------------------
 Bootstrap Schema:
 
-Finally, we should probably resign ourselves to the idea that a production DB
-will have to contain the wm.objects table.  We need a reliable way to know, at 
-least, the hash for each instantiated object, if not also its drop/create code.
+Finally, we will resign to the fact that a production DB will have to  contain 
+the wm.objects table.  We need a reliable way to know, at least, the hash for 
+each instantiated object.  And it will be much easier to bring and old schema 
+current using the build mechanism previously only a part of the development 
+environment.
 
-There is probably no compelling reason to require a trimmed-down schema 
-(lacking development components) in a production database.
+There is probably not that compelling a reason anyway to use a trimmed-down 
+schema (lacking development components) in a production database.
 -------------------------------------------------------------------------------
 Data Sources:
 
@@ -264,7 +289,7 @@ file format is proposed:
     boot:	"Encoded bootstrap SQL",
     dict:	"Encoded SQL to delete/insert data dictionary tables",
     init:	"Encoded application schema initialization SQL",
-    objects: [			//All objects in current release
+    objects: [		//All objects in current release, in dependency order
       obj1: {
         hash:		"ABC...",
         type:		"View, table, etc",

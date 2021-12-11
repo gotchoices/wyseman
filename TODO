@@ -1,11 +1,18 @@
 Wyseman TODO
-- Advance new node wyseman to produce new schema format file
--   Can produce file for any specified version?
+X- Advance new node wyseman to produce new schema format file
+X- Revert ruby wyseman back to old baseline behavior
+X- Make Wyseman.conf file to define operations and input files for modes
+- Make regression tests run properly
+- 
+- Make module to accept/edit/process migration deltas
+- Can input deltas from command line (writes to wmg file)
+- Can edit wmg file directly
+- Wait for actual migrations to test on mychips schema
+- 
+- Can produce schema file for any specified version?
 - Add delta column to wm.objects table
 - Add hash column to wm.objects table
 - Make JSON (writable) view over wm.objects
-- Revert ruby wyseman back to old baseline behavior
-- Make module to accept/edit/process migration deltas
 - Wyseman maintains Wyseman.delta file(s)	(or: .sourceFile.wmm)
 - Wyseman maintains Wyseman.hist file(s)	(or: .sourceFile.wmh)
 - 
@@ -14,7 +21,7 @@ Wyseman TODO
 -  Can produce Sql to populate wm.objects and instantiate schema from there
 -  Can produce delta script from any version to any other
 - 
-- Pgplsql make routine applies deltas from last committed table form
+- Plgsql make routine applies deltas from last committed table form
 - 
 - Implement (sql and wyseman CLI) command for committing/locking a schema version
 - Switch over to new wyseman for mainstream development

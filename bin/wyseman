@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+#This ruby version is deprecated and replaced by wyseman.js
 #Command line interface for managing a schema in wyseman
 #Copyright WyattERP.org; See license in root of this package
 # -----------------------------------------------------------------------------
