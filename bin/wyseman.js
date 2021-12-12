@@ -66,6 +66,7 @@ var dbc = new DbClient({			//Will connect using standard lib first
   host: opts.host, 				//It builds DB if not present
   database: opts.dbname || opts.user,
   user: opts.user,
+  schema: Path.join(__dirname, '../lib', 'bootstrap.sql')
 })
 dbc.connect(() => {
   let initSql = ''

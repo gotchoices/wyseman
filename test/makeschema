@@ -2,7 +2,7 @@
 //Make a schema file in this directory, from the bare wyselib schema components.
 //It is needed in order to build the DB used in the mocha tests.
 //If you use the same DB name as the mocha test uses, and don't drop the DB (at the end),
-//You can check for undocumented columns in the bootstrap schema.
+//you can check for undocumented columns in the bootstrap schema.
 //Otherwise, everything else will get checked (normally plenty good)
 
 const { DatabaseName, DBAdmin } = require('./settings')	//Use the same one as the mocha tests
@@ -14,16 +14,17 @@ const Path = require('path')
 //const wyselib = Path.join('..', 'node_modules', 'wyselib', 'schema')
 const wyselib = Path.dirname(require.resolve('wyselib/schema/wylib.wmt'))
 
+var opts = `--dbname=${databaseName} --user=${DBAdmin}`
 var cmd, output
-cmd = `wyseman --dbname=${databaseName} --user=${DBAdmin} ` + Path.join(wyselib, '*.wms') + ' ' + Path.join(wyselib, 'base', '*.wms')
+cmd = `wyseman ${opts} ${Path.join(wyselib, '*.wms')}  ${Path.join(wyselib, 'base', '*.wms')}`
 output = execSync(cmd)
 console.log("Building objects:", cmd)
 
-cmd = `wyseman --dbname=${databaseName} --user=${DBAdmin} ` + Path.join(wyselib, '*.wmt') + ' ' + Path.join(wyselib, 'base', '*.wmt')
+cmd = `wyseman ${opts} ${Path.join(wyselib, '*.wmt')}  ${Path.join(wyselib, 'base', '*.wmt')}`
 output = execSync(cmd)
 console.log("Building text:", cmd)
 
-cmd = `wyseman -s --dbname=${databaseName} --user=${DBAdmin} ` + Path.join(wyselib, '*.wmi') + ' ' + Path.join(wyselib, 'base', '*.wmi')
+cmd = `wyseman -s ${opts} ${Path.join(wyselib, 'base', '*.wmi')}`
 output = execSync(cmd)
 console.log("Building SQL:", cmd)
 
