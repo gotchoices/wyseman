@@ -48,7 +48,6 @@ var opts = require('yargs')
   .alias('p', 'prune')	.boolean('make').default('prune',	true,	'Remove any objects no longer in the source file(s)')
   .alias('d', 'drop')	.boolean('drop').default('drop',	true,	'Attempt to drop objects before creating')
   .alias('z', 'post')	.boolean('post').default('post',	true,	'Run the post-parse cleanup scans (default behavior)')
-  .alias('i', 'init')	.boolean('init').default('init',	false,	'Write initialization SQL to stdout (as opposed to executing it in the DB)')
   .alias('q', 'quiet')	.boolean('quiet').default('quiet',	false,	'Suppress printing of database notices')
   .alias('l', 'list')	.boolean('list').default('list',	false,	'List DB objects and their dependencies')
   .alias('s', 'sql')	.boolean('sql').default('sql',		false,	'Output SQL to create a database')
@@ -99,7 +98,7 @@ dbc.connect(() => {
     }
   }		//make
 
-  if (opts.init && initSql != '') {
+  if (initSql != '') {
     console.error("Running Initialization SQL")
     db.x(initSql)
   }
