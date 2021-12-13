@@ -233,11 +233,11 @@ create or replace function wm.check_deps() returns boolean language plpgsql as $
           if not FOUND then
             begin
               select * into strict trec from wm.objects_v where obj_nam = d and release = orec.release;	-- Do we only have the name, with no type?
-              EXCEPTION
-                when NO_DATA_FOUND then
-                  raise exception 'Dependency:%, by object:%, not found', d, orec.object;
-                when TOO_MANY_ROWS then
-                  raise exception 'Dependency:%, by object:%, not unique', d, orec.object;
+            exception
+              when NO_DATA_FOUND then
+                raise exception 'Dependency:% r%, by object:%, not found', d, orec.release, orec.object;
+              when TOO_MANY_ROWS then
+                raise exception 'Dependency:% r%, by object:%, not unique', d, orec.release, orec.object;
             end;
             d = trec.object;				-- Use fully qualified object name
           end if;

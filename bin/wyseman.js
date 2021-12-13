@@ -5,10 +5,9 @@
 //TODO:
 //X- Switch to generate dependency report?
 //X- Output correct version
-//- Try building new schema format on blank database
-//- Generate schema hash?
-//- Option to check dependencies against DB's opinion (if it has one)?
-//- Why does tty blank out when node process dies in the middle
+//X- Try building new schema format on blank database
+//X- Generate real schema hash?
+//- Why does tty blank out when node process dies in the middle (node bug?)
 //- 
 //- Old ruby-based TODOs:
 //- How to input/update table migration scripts (such as changing column names, adding or deleting columns)
@@ -106,7 +105,7 @@ dbc.connect(() => {
 //console.log("s:", opts.s, !!opts.s, opts.s == true)
   var output = process.stdout
   if (opts.sql || opts.schema) {			//Got some form of -s switch
-    let schema = new Schema(db, initSql)
+    let schema = new Schema({db, init: initSql})
 
     if (opts.sql) {					//Show debug output
       output.write(schema.sql())

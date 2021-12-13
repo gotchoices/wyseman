@@ -1,7 +1,7 @@
 Wyseman TODO
 X- Wyseman init not filling in country table
-- Include bootstrap in schema build SQL?
-- Database built from Sql runs immediately under wyseman (not after 2nd try)
+X- Include bootstrap in schema build SQL?
+X- Database built from Sql runs immediately under wyseman (not after 2nd try)
 - 
 - Make module to accept/edit/process migration deltas
 - Can input deltas from command line (writes to wmg file)
