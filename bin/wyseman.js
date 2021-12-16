@@ -9,7 +9,7 @@
 //X- Generate real schema hash?
 //- Why does tty blank out when node process dies in the middle (node bug?)
 //- 
-//- Old ruby-based TODOs:
+//- Old pre-js-port TODOs:
 //- How to input/update table migration scripts (such as changing column names, adding or deleting columns)
 //- Manage releases:
 //-   Test: versions > 1 function correctly
@@ -21,10 +21,11 @@
 //- "Make objects" on a DB built from pre-packaged schema fails the first time (but then works)
 //- 
 
-const DbClient = require('../lib/dbclient.js')
-const DbSync = require('../lib/dbsync.js')
-const Parser = require('../lib/parser.js')
-const Schema = require('../lib/schema.js')
+const DbClient = require('../lib/dbclient')
+const DbSync = require('../lib/dbsync')
+const Parser = require('../lib/parser')
+const Schema = require('../lib/schema')
+const Migrate = require('../lib/migrate')
 const Path = require('path')
 const Fs = require('fs')
 const Pg = require('pg-native')
@@ -42,6 +43,7 @@ var opts = require('yargs')
   .alias('u', 'user')	.default('user',	config.user || Env.WYSEMAN_USER || 'admin',	'Specify the database user name explicitly (rather than defaulting to the username)')
   .alias('b', 'branch')	.default('branch',	'',			'Include the specified object and all others that depend on it')
   .alias('S', 'schema')	.default('schema',	null,			'Create a schema file with the specified filename')
+  .alias('g', 'migrate').default('migrate',	null,			'Enter a schema migration command')
   .alias('r', 'replace').boolean('replace').default('replace',	false,	'Replace views/functions where possible')
   .alias('m', 'make')	.boolean('make').default('make',	true,	'Build any uninstantiated objects in the database')
   .alias('p', 'prune')	.boolean('make').default('prune',	true,	'Remove any objects no longer in the source file(s)')
@@ -70,30 +72,37 @@ dbc.connect(() => {
   let initSql = ''
     , db = new DbSync(opts)			//Now connect synchronously
     , branchVal = 'null'
-    , wm = new Parser(db)			//Initialize the schema parser
+    , parser = new Parser(db)			//Initialize the schema parser
+    , mig = new Migrate(db)			//Initialize migration structure
 
   if (opts.list) {
     let deplist = db.x("select depth,object,deps from wm.objects_v_depth order by depth,deps")
     console.log("Objects:", JSON.stringify(deplist, null, 2))
   }
 
+  if (opts.g) {					//Process new schema migration commands
+    ;[].concat(opts.g).forEach(g => mig.process(g))
+  }
+
+//console.log('Files:', sourceFiles)
   for (let file of sourceFiles) {		//parse source files
-    let sql = wm.parse(file)			//Accumulate sql commands for later
+    let sql = parser.parse(file)		//Accumulate sql commands for later
     initSql += sql
   }
 
 //console.log('prune:', opts.prune, 'post:', opts.post)
-  if (opts.post) wm.check(opts.prune)		//And do post-cleanup
-
-//console.log('Make:', opts.make, 'Drop:', opts.drop)
+  if (opts.post) parser.check(opts.prune)	//And do post-cleanup
 
     //Instantiate specified, or default objects in the database, with optional pre-drop
+//console.log('Make:', opts.make, 'Drop:', opts.drop)
   if (opts.make) {				//Are branches specified
+    mig.updateDB(parser.paths())		//Process any delta files
     let branchVal = (opts.branch == '') ? null : "'{" + opts.branch.trim().split(' ').join(',') + "}'"
       , res = db.one(`select wm.make(${branchVal},${opts.drop},true);`)	//Make specified objects
 //console.log("make:", res)
+    mig.updateFiles(parser.paths())		//Process any delta files
     if (parseInt(res.make) > 0) {
-      db.x("select wm.init_dictionary();")		//Re-initialize dictionary
+      db.x("select wm.init_dictionary();")	//Re-initialize dictionary
     }
   }		//make
 

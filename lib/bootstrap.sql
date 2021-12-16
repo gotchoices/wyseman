@@ -36,6 +36,7 @@ create or replace function wm.create_role(grp text, subs text[] default '{}') re
     return retval;
   end;
 $$;
+revoke all on function wm.create_role from public;
 
 -- Track official module releases
 -- Whatever is max(release) is the current, working copy
@@ -47,6 +48,7 @@ create table wm.releases (
   , sver_1	int		-- Dummy column indicates the version of this bootstrap schema
 );
 insert into wm.releases (release) values (1);
+revoke all on table wm.releases from public;
 
 -- Latest (working) release number (exists development and distribution modes)
 -- A version of this exists in the distribution mode schema which returns a constant indicating the current version
@@ -64,6 +66,7 @@ create or replace function wm.workdir(uniq text default '') returns text stable 
   if {![file exists $path]} {file mkdir $path}
   return $path
 $$;
+revoke all on function wm.workdir from public;
 
 -- Contains an entry for each database object we are creating
 -- ----------------------------------------------------------------------------
@@ -80,6 +83,7 @@ create table wm.objects (
   , ndeps	text[]					-- List of normalized dependencies
   , grants	text[]		not null default '{}'	-- List of grants
   , col_data	text[]		not null default '{}'	-- Extra data about columns, for views
+  , delta	jsonb					-- List of migration commands
   , crt_sql	text		not null		-- SQL to create the object
   , drp_sql	text		not null		-- SQL to drop the object
   , min_rel	int		default wm.release()	-- smallest release this object belongs to
@@ -88,6 +92,7 @@ create table wm.objects (
   , mod_date	timestamp(0)	default current_timestamp	-- When record last modified
   , primary key (obj_typ, obj_nam, obj_ver)
 );
+revoke all on table wm.objects from public;
 
 -- Before deleting an object
 -- ----------------------------------------------------------------------------
@@ -96,7 +101,7 @@ create or replace function wm.objects_tf_bd() returns trigger language plpgsql s
     if old.min_rel < wm.release() then		-- If object belongs to earlier releases
       raise 'Object %:% part of an earlier committed release', old.obj_typ, old.obj_nam;
     elsif old.max_rel > old.min_rel then
-      update wm.objects set max_rel = max_rel - 1 where obj_typ = old.obj_typ and obj_nam = old.obj_nam and obj_ver = wm.release();
+      update wm.objects_v_max set max_rel = max_rel - 1 where obj_typ = old.obj_typ and obj_nam = old.obj_nam;
       return null;
     elsif old.clean then
       perform wm.make(array[old.obj_typ || ':' || old.obj_nam], true, false);
@@ -106,7 +111,7 @@ create or replace function wm.objects_tf_bd() returns trigger language plpgsql s
 $$;
 create trigger tr_bd before delete on wm.objects for each row execute procedure wm.objects_tf_bd();
 
--- Store a grant in the object table
+-- Store a grant in a draft record in the object table
 -- ----------------------------------------------------------------------------
 create or replace function wm.grant(
     otyp	text		-- Object type we're granting permissions to
@@ -136,10 +141,11 @@ create or replace function wm.grant(
     return true;
   end;
 $$;
+revoke all on function wm.grant from public;
 
 -- Standard view of dependencies with level and path information
 -- ----------------------------------------------------------------------------
-create or replace view wm.depends_v as
+create or replace view wm.objdeps_v as
   with recursive search_deps(object, obj_typ, obj_nam, depend, release, depth, path, cycle) as (
       select (o.obj_typ || ':' || o.obj_nam)::text as object, o.obj_typ, o.obj_nam, null::text, r.release,0, '{}'::text[], false
  	from	wm.objects	o
@@ -153,13 +159,23 @@ create or replace view wm.depends_v as
         join    search_deps     dr	on dr.object = d and dr.release = r.release	-- iterate through dependencies
         where			not cycle
   ) select object,obj_typ as od_typ, obj_nam as od_nam, depend, release as od_release, depth, path, cycle, path || object as fpath from search_deps;
+revoke all on table wm.objdeps_v from public;
 
 -- View of objects and each release they belong to
 -- ----------------------------------------------------------------------------
 create or replace view wm.objects_v as
-  select o.obj_typ || ':' || o.obj_nam as object, o.*, r.release
+       select o.obj_typ || ':' || o.obj_nam as object, o.*, r.release
   from		wm.objects	o
   join		wm.releases	r	on r.release between o.min_rel and o.max_rel;
+revoke all on table wm.objects_v from public;
+  
+-- View of objects with the largest version number
+-- ----------------------------------------------------------------------------
+create or replace view wm.objects_v_max as
+       select o.*
+  from		wm.objects	o
+  where		o.obj_ver = (select max(s.obj_ver) from wm.objects s where s.obj_typ = o.obj_typ and s.obj_nam = o.obj_nam);
+revoke all on table wm.objects_v_max from public;
   
 -- Check any draft (obj_ver=0) entries, to be merged or promoted
 -- ----------------------------------------------------------------------------
@@ -190,7 +206,7 @@ raise notice 'Adding: %:%', drec.obj_typ, drec.obj_nam;
         continue;
       end if;
 
-      select * into prec from wm.objects where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam order by obj_ver desc limit 1;	-- Get the latest non-draft record
+      select * into prec from wm.objects_v_max where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam;	-- Get the latest non-draft record
       if (drec.crt_sql  is distinct from prec.crt_sql)	or	-- Has anything important changed?
          (drec.drp_sql  is distinct from prec.drp_sql)	or
          (drec.deps     is distinct from prec.deps)	or
@@ -214,6 +230,7 @@ raise notice 'Increm: %:%', drec.obj_typ, drec.obj_nam;
     return true;
   end;
 $$;
+revoke all on function wm.check_drafts from public;
     
 -- Normalize dependencies on yet unchecked objects
 -- ----------------------------------------------------------------------------
@@ -249,14 +266,16 @@ create or replace function wm.check_deps() returns boolean language plpgsql as $
     return true;
   end;
 $$;
+revoke all on function wm.check_deps from public;
 
 -- View of objects including their maximum depth
 -- ----------------------------------------------------------------------------
 create or replace view wm.objects_v_depth as
   select o.*, od.depth
   from		wm.objects_v	o
-  join		(select od_typ, od_nam, od_release, max(depth) as depth from wm.depends_v group by 1,2,3) od on od.od_typ = o.obj_typ and od.od_nam = o.obj_nam and od.od_release = o.release
+  join		(select od_typ, od_nam, od_release, max(depth) as depth from wm.objdeps_v group by 1,2,3) od on od.od_typ = o.obj_typ and od.od_nam = o.obj_nam and od.od_release = o.release
   order by	depth;
+revoke all on table wm.objects_v_depth from public;
 
 -- Attempt to replace a view or function
 -- ----------------------------------------------------------------------------
@@ -272,8 +291,8 @@ raise notice 'Replace:% :%:', trec.depth, trec.object;
     update wm.objects set clean = true where obj_typ = trec.obj_typ and obj_nam = trec.obj_nam and obj_ver = trec.obj_ver;
     return true;
   end;
-
 $$;
+revoke all on function wm.replace from public;
 
 -- Drop/create a group of database objects
 -- ----------------------------------------------------------------------------
@@ -303,10 +322,11 @@ create or replace function wm.make(
       end loop;
     end if;
   
+--raise notice 'Pre-search:%', objs;
     foreach s in array objs loop	-- for each specified object, expand to dependent objects
-      objlist = objlist || array(select distinct object from wm.depends_v where s = any(fpath) and od_release = wm.release());
+      objlist = objlist || array(select distinct object from wm.objdeps_v where s = any(fpath) and od_release = wm.release());
     end loop;
--- raise notice 'objlist:%', objlist;
+--raise notice 'objlist:%', objlist;
     create temporary table _table_info (obj_nam text primary key, columns text, fname text, rows int);
 
     if drp then			-- Drop specified objects
@@ -320,6 +340,7 @@ raise notice 'Drop:% :%:', trec.depth, trec.object;
               raise notice 'Skipping non-existant: %:%', trec.obj_typ, trec.obj_nam;
               continue;
           end;
+          perform wm.migrate(trec.obj_nam, trec.delta);		-- Need to modify table?
         end if;
         if trec.obj_typ = 'table' and cnt > 0 then		-- Attempt to preserve existing table data
           collist = array_to_string(array(select column_name::text from information_schema.columns where table_schema || '.' || table_name = trec.obj_nam order by ordinal_position),',');
@@ -372,3 +393,46 @@ raise notice 'Create:% :%:', trec.depth, trec.object;
     return counter;
   end;
 $$;
+revoke all on function wm.make from public;
+
+-- Process group of object migration commands
+-- ----------------------------------------------------------------------------
+create or replace function wm.migrate(objname text, migs jsonb) 
+  returns boolean language plpgsql as $$
+  declare
+    cmd		jsonb;
+    sql		text;
+    i		int default 0;
+  begin
+
+    if migs isnull then return true; end if;
+--raise notice 'Migrate: % %', objname, migs;
+
+    for cmd in select * from jsonb_array_elements(migs) loop		-- for each migration command
+      if not (cmd->'dirty')::boolean then continue; end if;		-- only process commands not yet done
+      if cmd->>'oper' = 'drop' then
+raise notice 'Migrate: drop % column:%', objname, cmd->>'col';
+        sql = 'alter table ' || objname || ' drop column ' || (cmd->>'col') || ';';
+      elsif cmd->>'oper' = 'rename' then
+raise notice 'Migrate: rename % column:% to:%', objname, cmd->>'col', cmd->>'spec';
+        sql = 'alter table ' || objname || ' rename column ' || (cmd->>'col') || ' to ' || (cmd->>'spec') || ';';
+        null;
+      elsif cmd->>'oper' = 'update' then
+raise notice 'Migrate: update % column:% =:%', objname, cmd->>'col', cmd->>'spec';
+        sql = 'update ' || objname || ' set ' || (cmd->>'col') || ' = ' || (cmd->>'spec') || ';';
+      else
+        null;
+      end if;
+--raise notice 'SQL: %', sql;
+      execute sql;
+      cmd = cmd - 'dirty';		-- remove dirty flag
+      migs = jsonb_set(migs, ('{' || i || '}')::text[], cmd);
+--raise notice 'Migs: % : %', cmd, migs;
+      i = i + 1;
+    end loop;
+    update wm.objects_v_max set delta = migs where obj_typ = 'table' and obj_nam = objname;
+--raise exception 'Stop';
+    return true;
+  end;
+$$;
+revoke all on function wm.migrate from public;

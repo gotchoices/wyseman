@@ -1,49 +1,17 @@
 Wyseman TODO
-X- Wyseman init not filling in country table
-X- Include bootstrap in schema build SQL?
-X- Database built from Sql runs immediately under wyseman (not after 2nd try)
-- 
-- Make module to accept/edit/process migration deltas
-- Can input deltas from command line (writes to wmg file)
-- Can edit wmg file directly
-- Wait for actual migrations to test on mychips schema
-- 
-- Can produce schema file for any specified version?
-- Add delta column to wm.objects table
-- Add hash column to wm.objects table
-- Make JSON (writable) view over wm.objects
-- Wyseman maintains Wyseman.delta file(s)	(or: .sourceFile.wmm)
+- Implement (sql and wyseman CLI) command for committing/locking a schema release
 - Wyseman maintains Wyseman.hist file(s)	(or: .sourceFile.wmh)
+- Can produce/instantiate schema for any specified release
+- Can test/re-test complete migration from one release to the next
+-   Include module for application to test its own migrations
+- Run-time library automatically (or on demand) updates to latest schema version
 - 
-- Make runtime handler to (also) use new schema file format
--  Can produce a straight sql file from the necessary parts (for new DB)
--  Can produce Sql to populate wm.objects and instantiate schema from there
--  Can produce delta script from any version to any other
+- Can remove "source" field from wm.objects now?
+-   How to prune removed objects (maybe just manually?)
+- Can remove "mod_ver" field from wm.objects
 - 
-- Plgsql make routine applies deltas from last committed table form
-- 
-- Implement (sql and wyseman CLI) command for committing/locking a schema version
-- Switch over to new wyseman for mainstream development
+- Switch over to JS wyseman for mainstream development
 - Start committing schema versions in mychips
 - 
-- 
-- OLD:
-?- Separate run-time scripts to separate wyclif module (Control Layer InterFace)
-- Implement/store table modification microscripts where drop/create won't do
--  When a table column is removed or renamed, the old data won't import (have to manually rename first)
--  When a new constraint is added, the old data may not fit anymore.  May have to filter it.
--  When an object is removed from the schema, items in the db may still be dependent on it and drops may not work without a cascade
-- Test/validate schema release versioning features
-- Tie single digit release number to associated semver release ID?
-- Finish porting ruby run-time
-- 
-- Versioning:
-- Can I get rid of release function and releases table?
-- get rid of object.source.  Let the user prune anything that doesn't show up
-- get rid of object.mod_ver
-- get rid of object.module? (do we care or is the schema really the thing?)
-- do I need objects_v?
-- rename depends_v?
-- 
-- 
+- Remove Ruby legacy wyseman command
 - 

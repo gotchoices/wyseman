@@ -1,11 +1,5 @@
 Schema Version Control
 
--------------------------------------------------------------------------------
-(May 2020)
-
-This document is currently a design specification as full version control has
-not yet been implemented in Wyseman.
-
 Objectives:
 -------------------------------------------------------------------------------
 Wyseman has three fundamental purposes:
@@ -26,7 +20,7 @@ Wyseman has three fundamental purposes:
   This has not yet been implemented.
 
 -------------------------------------------------------------------------------
-Version Control (Dec 2021)
+Version Control Enhancements (Dec 2021)
 
 The initial approach of the Ruby/JS port (as of 1.0.17) was to rely on a 
 "release" number for each official version of the schema.  This approach has 
@@ -172,16 +166,15 @@ be stored in the order they were created, and are expected to be applied.
 -------------------------------------------------------------------------------
 History / Migration:
 
-Wyseman will maintain files in the application schema folder(s)--perhaps a
-hidden file for each source file: .<source>.wmh (wyseman history).  This file 
-holds a JSON structure containing the raw SQL information (what is in 
-wm.objects) about all objects part of prior release commits, but not 
-representing any current changes in the associated schema file.
+Wyseman will maintain files in the application schema folders called
+Wyseman.hist.  This file holds a JSON structure containing the raw SQL 
+information (what is in wm.objects) about all objects part of prior releases
+but not representing any current changes in the associated schema file.
 
 We will create a new command line switch to wyseman to accept a table
 migration operation (delta) such as add, drop, rename, or update).  This
-operation will be pushed onto a stack contained another hidden file called
-".source.wmg".  The user will also have the ability to simply add delta
+operation will be pushed onto a stack contained in another file called
+Wyseman.delta.  The user will also have the ability to simply add delta
 operations to that file by hand if they feel comfortable doing so.
 
 Examples of table migration commands:
@@ -318,13 +311,12 @@ file format is proposed:
 A schema file of this format should contain enough information to build a new, 
 empty schema of the current version, or (assuming the history property is 
 present) to upgrade an existing database from any version up to the current.
+
 -------------------------------------------------------------------------------
-Strategy (OLDER, OBSOLETE):
+Boot Loader:
 
-Instead of a schema file that is straight SQL create code, the following file
-format is proposed:
+A JSON schema file may be wrapped into a self-loading sql chunk as follows:
 
---Schema|<release>|<publish_date>|<schema_hash_of_hashes>
 create schema if not exists wm;
 create or replace function wm.loader(objs jsonb) as $$
   ... -- loader capable of reading JSON structure below
@@ -332,25 +324,11 @@ $$;
 wm.loader('{
   "hash":	"Hash of release object hashes",
   "release":	Release_number,
-  "published":	"Published Date (null if work-in-process)",
-  "bootstrap":	"Encoded bootstrap SQL",
-  "initialize":	"Encoded initialization SQL",
-  "dictionary":	"Encoded SQL to delete/insert data dictionary tables",
-  "objects":	[		#All objects in current release
-    "<obj1>":	{"hash": "ABC...", "sql":"Encoded insert data"},
-    "<obj2>":	{"hash": "BCD...", "sql":"Encoded insert data"},
-    "<obj3>":	{"hash": "CDE...", "sql":"Encoded insert data"},
-  ],
-  "history": {
-    "hash":	"Hash of history hashes",
-    "objects": [		#All tables from past releases
-      "<obj1>":	{"hash": "ABC...", "sql":"Encoded insert data"},
-      "<obj2>":	{"hash": "BCD...", "sql":"Encoded insert data"},
-      "<obj3>":	{"hash": "CDE...", "sql":"Encoded insert data"},
-  ]},
-}');
+  ...
+}'); drop function wm.loader(jsonb);
 
-A schema file of this format should contain enough information to build a new,
-empty schema of the current version, or to upgrade an existing database from
-any version up to the current.
+This has the advantage that the schema will be built by first populating
+wm.objects and then instantiating each of the objects.  This will make future
+updating much easier.
+
 -------------------------------------------------------------------------------
