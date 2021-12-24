@@ -1,0 +1,13 @@
+#Schema for testing wyseman
+#Copyright WyattERP.org; See license in root of this package
+#----------------------------------------------------------------
+module wyseman
+schema wyseman {}
+
+table wyseman.items {wyseman} {
+    name	text
+  , version	int
+  , released	date
+  , descr	text
+  , primary key (name, version)
+}

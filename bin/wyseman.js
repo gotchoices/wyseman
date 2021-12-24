@@ -3,37 +3,22 @@
 //Copyright WyattERP.org; See license in root of this package
 // -----------------------------------------------------------------------------
 //TODO:
-//X- Switch to generate dependency report?
-//X- Output correct version
-//X- Try building new schema format on blank database
-//X- Generate real schema hash?
 //- Why does tty blank out when node process dies in the middle (node bug?)
 //- 
-//- Old pre-js-port TODOs:
-//- How to input/update table migration scripts (such as changing column names, adding or deleting columns)
-//- Manage releases:
-//-   Test: versions > 1 function correctly
-//-   Move SQL output code to a separate module?
-//X-   Generate a version function when SQL build code is generated
-//-   Can generate SQL for any past version still in the database
-//-   Can generate sql to upgrade existing database to a specified release specification
-//-   Can dump wm.objects and restore it to a different site for version management there
-//- "Make objects" on a DB built from pre-packaged schema fails the first time (but then works)
-//- 
-
 const DbClient = require('../lib/dbclient')
 const DbSync = require('../lib/dbsync')
 const Parser = require('../lib/parser')
 const Schema = require('../lib/schema')
 const Migrate = require('../lib/migrate')
+const History = require('../lib/history')
 const Path = require('path')
 const Fs = require('fs')
 const Pg = require('pg-native')
 const Env = process.env
-const file = Path.resolve('.', 'Wyseman.conf')
-
+const ConFile = Path.resolve('.', 'Wyseman.conf')
 var config = {}
-if (Fs.existsSync(file)) config = require(file)		//;console.log("config:", config)
+if (Fs.existsSync(ConFile)) config = require(ConFile)		//;console.log("config:", config)
+const SchemaDir = config.dir || Path.resolve('.')
 
 var opts = require('yargs')
   .alias('?', 'help')	.default('help', false, 'Show help message')	//{STDERR.puts opts; exit}
@@ -41,9 +26,10 @@ var opts = require('yargs')
   .alias('h', 'host')	.default('host',	config.host || Env.WYSEMAN_HOST || 'localhost','Specify the database host name explicitly (rather than defaulting to the local system)')
   .alias('P', 'port')	.default('port',	config.port || Env.WYSEMAN_PORT || 5432,	'Specify the database port explicitly (rather than defaulting to 5432)')
   .alias('u', 'user')	.default('user',	config.user || Env.WYSEMAN_USER || 'admin',	'Specify the database user name explicitly (rather than defaulting to the username)')
-  .alias('b', 'branch')	.default('branch',	'',			'Include the specified object and all others that depend on it')
-  .alias('S', 'schema')	.default('schema',	null,			'Create a schema file with the specified filename')
-  .alias('g', 'migrate').default('migrate',	null,			'Enter a schema migration command')
+  .alias('b', 'branch')	.default('branch',	'',		'Include the specified object and all others that depend on it')
+  .alias('S', 'schema')	.default('schema',	null,		'Create a schema file with the specified filename')
+  .alias('g', 'migrate').default('migrate',	null,		'Enter a schema migration command')
+  .alias('C', 'commit')	.boolean('commit').default('commit',	false,	'Commit official schema release in the default directory')
   .alias('r', 'replace').boolean('replace').default('replace',	false,	'Replace views/functions where possible')
   .alias('m', 'make')	.boolean('make').default('make',	true,	'Build any uninstantiated objects in the database')
   .alias('p', 'prune')	.boolean('make').default('prune',	true,	'Remove any objects no longer in the source file(s)')
@@ -72,8 +58,9 @@ dbc.connect(() => {
   let initSql = ''
     , db = new DbSync(opts)			//Now connect synchronously
     , branchVal = 'null'
-    , parser = new Parser(db)			//Initialize the schema parser
-    , mig = new Migrate(db)			//Initialize migration structure
+    , hist = new History(db, SchemaDir, config.module)	//Manages past schema ojects
+    , mig = new Migrate(db, SchemaDir)			//Migration handler
+    , parse = new Parser(db)				//Schema parser
 
   if (opts.list) {
     let deplist = db.x("select depth,object,deps from wm.objects_v_depth order by depth,deps")
@@ -86,22 +73,28 @@ dbc.connect(() => {
 
 //console.log('Files:', sourceFiles)
   for (let file of sourceFiles) {		//parse source files
-    let sql = parser.parse(file)		//Accumulate sql commands for later
+    let sql = parse.parse(file)			//Accumulate sql commands for later
     initSql += sql
   }
 
 //console.log('prune:', opts.prune, 'post:', opts.post)
-  if (opts.post) parser.check(opts.prune)	//And do post-cleanup
+  if (opts.post) parse.check(opts.prune)	//And do post-cleanup
 
     //Instantiate specified, or default objects in the database, with optional pre-drop
 //console.log('Make:', opts.make, 'Drop:', opts.drop)
-  if (opts.make) {				//Are branches specified
-    mig.updateDB(parser.paths())		//Process any delta files
+  if (opts.post && opts.make) {
+    let modules = parse.module()
+      , modDirs = Object.values(modules)
+    mig.updateDB(modDirs, opts.commit)		//Process any delta files
+
     let branchVal = (opts.branch == '') ? null : "'{" + opts.branch.trim().split(' ').join(',') + "}'"
       , res = db.one(`select wm.make(${branchVal},${opts.drop},true);`)	//Make specified objects
+      , modified = res.make
 //console.log("make:", res)
-    mig.updateFiles(parser.paths())		//Process any delta files
-    if (parseInt(res.make) > 0) {
+    if (modified || opts.commit) hist.process(opts.commit)
+    if (opts.commit) mig.clear()
+
+    if (parseInt(modified) > 0) {
       db.x("select wm.init_dictionary();")	//Re-initialize dictionary
     }
   }		//make

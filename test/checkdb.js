@@ -3,23 +3,22 @@
 //- 
 
 const assert = require("assert");
-const { DatabaseName, DBAdmin } = require('../settings')
+const { TestDB, DBAdmin } = require('./settings')
 const Log = require(require.resolve('wyclif/lib/log.js'))
+const DbClient = require("../lib/dbclient.js")
 var log = Log('test-checkdb')
 var fs = require('fs')
-var dbClient = require("../../lib/dbclient.js")
 const dbConfig = {
-  database: DatabaseName,
+  database: TestDB,
   user: DBAdmin,
-  listen: "DummyChannel",		//Cause immediate connection to DB, rather than deferred
-  schema: __dirname + "/../schema.sql"
+  connect: true,
 }
 
 describe("Build DB and check it", function() {
   var db
 
   before('Connect to (or create) test database', function(done) {
-    db = new dbClient(dbConfig, (chan, data)=>{
+    db = new DbClient(dbConfig, (chan, data)=>{
       log.debug("Async message:", chan, data); 
     }, ()=>{
       log.debug("Connected"); 

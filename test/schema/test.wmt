@@ -1,0 +1,8 @@
+#Copyright WyattERP.org; See license in root of this package
+#----------------------------------------------------------------
+tabtext wyseman.items	{Items}		{Table contains hypothetical items} {
+    {name		{Item Name}		{The item name}}
+    {version		{Version}		{The item's version}}
+    {released		{Released}		{When it was released}}
+    {comment		{Additional Info}	{Notes about the item}}
+}

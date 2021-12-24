@@ -3,24 +3,23 @@
 //- 
 
 const assert = require("assert");
-const { DatabaseName, DBAdmin } = require('../settings')
+const { TestDB, DBAdmin } = require('./settings')
 const Log = require(require.resolve('wyclif/lib/log.js'))
 var log = Log('test-metadata')
 var fs = require('fs')
-var dbClient = require("../../lib/dbclient.js")
+var DbClient = require("../lib/dbclient.js")
 
 const dbConfig = {
-  database: DatabaseName,
+  database: TestDB,
   user: DBAdmin,
-  listen: "DummyChannel",		//Cause immediate connection to DB, rather than deferred
-  schema: __dirname + "/../schema.sql"
+  connect: true,
 }
 
 describe("Check JSON structures in data dictionary", function() {
   var db
 
   before('Connect to test database', function(done) {
-    db = new dbClient(dbConfig, (chan, data)=>{
+    db = new DbClient(dbConfig, (chan, data)=>{
       log.debug("Async message:", chan, data); 
     }, ()=>{
       log.debug("Connected"); 

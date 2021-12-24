@@ -1,4 +1,0 @@
-One really should run ./makeschema afresh each time a regression test is run.
-It will rebuild the schema.sql file from sources and test against that.
-
-Otherwise, we really aren't testing the latest things.

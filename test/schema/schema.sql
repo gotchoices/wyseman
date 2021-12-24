@@ -1,8 +1,5 @@
 --Bootstrap:
--- Wyseman copy of function; Keep in sync with what is in bootstrap.sql
 create schema if not exists wm;
-grant usage on schema wm to public;
-
 create or replace function wm.create_role(grp text, subs text[] default '{}') returns boolean language plpgsql as $$
   declare
     retval	boolean default false;
@@ -18,9 +15,388 @@ create or replace function wm.create_role(grp text, subs text[] default '{}') re
     return retval;
   end;
 $$;
-create or replace function wm.release() returns int stable language sql as $$
-  select 1;
+
+create table wm.releases (
+    release	int		primary key default 1 check (release > 0)
+  , committed	timestamptz(3)
+  , sver_2	int		-- Dummy column: bootstrap schema version
+);
+insert into wm.releases (release) values (1) on conflict do nothing;
+
+create or replace function wm.next() returns int stable language sql as $$
+  select coalesce(max(release), 1) from wm.releases;
 $$;
+
+create or replace function wm.last() returns int stable language sql as $$
+  select nullif(wm.next()-1, 1);
+$$;
+
+create language pltclu;
+create or replace function wm.workdir(uniq text default '') returns text stable language pltclu as $$
+  set path {/var/tmp/wyseman}
+  if {$1 != {}} {set path "$path/$1"}
+  if {![file exists $path]} {file mkdir $path}
+  return $path
+$$;
+
+create table wm.objects (
+    obj_typ	text		not null		-- table, view, function, etc.
+  , obj_nam	text		not null		-- schema.name
+  , obj_ver	int		not null default 0	-- incremented when the object changes from the last committed release
+  , checked	boolean		default false		-- checked for merge, dependencies
+  , clean	boolean		default false		-- instantiated in current database
+  , module	text		not null		-- name of the schema group this object belongs to
+  , mod_ver	int					-- version of the schema group this object belongs to
+  , source	text		not null		-- name of the source file this object defined in
+  , deps	text[]		not null		-- List of dependencies, as user entered them
+  , ndeps	text[]					-- List of normalized dependencies
+  , grants	text[]		not null default '{}'	-- List of grants
+  , col_data	text[]		not null default '{}'	-- Extra data about columns, for views
+  , delta	jsonb					-- JSON array of migration commands
+  , crt_sql	text		not null		-- SQL to create the object
+  , drp_sql	text		not null		-- SQL to drop the object
+  , min_rel	int		default wm.next() references wm.releases check (min_rel <= max_rel) -- smallest release this object belongs to
+  , max_rel	int		default wm.next() references wm.releases	-- largest release this object belongs to
+  , crt_date	timestamp(0)	default current_timestamp	-- When record created
+  , mod_date	timestamp(0)	default current_timestamp	-- When record last modified
+  , primary key (obj_typ, obj_nam, obj_ver)
+);
+
+create or replace function wm.objects_tf_bd() returns trigger language plpgsql as $$
+  begin
+    if old.obj_ver <= 0 then			-- Can always delete draft entries
+      return old;
+    elsif old.min_rel < wm.next() then		-- Don't allow delete of historical objects
+      raise 'Object %:% part of an earlier committed release', old.obj_typ, old.obj_nam;
+    elsif old.max_rel > old.min_rel then	-- Object belongs to more than one release
+      update wm.objects_v_max set max_rel = max_rel - 1 where obj_typ = old.obj_typ and obj_nam = old.obj_nam;
+      return null;
+    elsif old.clean then			-- Delete the instantiated object and its dependencies
+      perform wm.make(array[old.obj_typ || ':' || old.obj_nam], true, false);
+    end if;
+    return old;
+  end;
+$$;
+create trigger objects_tr_bd before delete on wm.objects for each row execute procedure wm.objects_tf_bd();
+
+
+create or replace function wm.releases_tf() returns trigger language plpgsql as $$
+  begin
+    if TG_OP = 'DELETE' then	-- Can only delete the latest
+      return case when old.release < wm.next() then null else old end;
+    elsif TG_OP = 'UPDATE' then	-- Can only update the date
+      return case when new.release != old.release then null else new end;
+    end if;
+  end;
+$$;
+create trigger releases_tr before update or delete on wm.releases for each row execute procedure wm.releases_tf();
+
+
+create or replace function wm.commit(doit boolean = false) returns jsonb language plpgsql as $$
+  declare
+    nxt int = wm.next();
+  begin
+    if doit then
+      update wm.releases set committed = current_timestamp where release = nxt;
+      insert into wm.releases (release) values (nxt + 1);
+      update wm.objects set max_rel = nxt + 1 where max_rel = nxt;
+      nxt = nxt + 1;	-- used below
+    end if;
+    
+    return to_jsonb(s) from (select null as module,
+      (select jsonb_agg(coalesce(to_jsonb(r.committed::text), '0'::jsonb)) as releases
+        from (select * from wm.releases order by 1) r),
+      (select to_jsonb(coalesce(array_agg(o), '{}')) as history from
+        (select obj_typ,obj_nam,obj_ver,module,deps,grants,col_data,delta,
+            encode(crt_sql::bytea,'base64') as create, 
+            encode(drp_sql::bytea,'base64') as drop
+          from wm.objects_v where max_rel < nxt order by 1,2) o)) as s;
+  end;
+$$;
+
+create or replace function wm.grant(
+    otyp	text		-- Object type we're granting permissions to
+  , onam	text		-- Object name we're granting permissions to
+  , priv	text		-- A privilege name, defined for the application
+  , level	int		-- Application defined level 1,2,3 etc
+  , allow	text		-- select, insert, update, delete, etc
+) returns boolean language plpgsql as $$
+  declare
+    pstr	text default array_to_string(array[otyp||':'||onam,priv,level::text,allow], ',');
+    grlist	text[];
+    cln		boolean;	-- from object record
+  begin
+    select grants, clean into grlist, cln from wm.objects where obj_typ = otyp and obj_nam = onam and obj_ver = 0;
+    if not FOUND then
+      raise 'Can not find defined object:%:% to associate permissions with', otyp, onam;
+    end if;
+    if pstr = any(grlist) then
+      if not cln then raise notice 'Grant: % multiply defined on object:%:%', pstr, otyp, onam; end if;
+      return false;
+    else
+      update wm.objects set clean = false, grants = grlist || pstr where obj_typ = otyp and obj_nam = onam and obj_ver = 0;
+    end if;
+    return true;
+  end;
+$$;
+
+create or replace view wm.objdeps_v as
+  with recursive search_deps(object, obj_typ, obj_nam, depend, release, depth, path, cycle) as (
+      select (o.obj_typ || ':' || o.obj_nam)::text as object, o.obj_typ, o.obj_nam, null::text, r.release,0, '{}'::text[], false
+ 	from	wm.objects	o
+ 	join	wm.releases	r on r.release between o.min_rel and o.max_rel
+  	where o.ndeps = '{}'            		-- level 1 dependencies
+    union
+      select (o.obj_typ || ':' || o.obj_nam)::text as object, o.obj_typ, o.obj_nam, d, r.release,depth + 1, path || d, d = any(path)
+ 	from	wm.objects	o
+ 	join	wm.releases	r	on r.release between o.min_rel and o.max_rel
+ 	join	unnest(o.ndeps)	d	on true
+        join    search_deps     dr	on dr.object = d and dr.release = r.release	-- iterate through dependencies
+        where			not cycle
+  ) select object,obj_typ as od_typ, obj_nam as od_nam, depend, release as od_release, depth, path, cycle, path || object as fpath from search_deps;
+
+create or replace view wm.objects_v as
+       select o.obj_typ || ':' || o.obj_nam as object, o.*, r.release
+  from		wm.objects	o
+  join		wm.releases	r	on r.release between o.min_rel and o.max_rel;
+  
+create or replace view wm.objects_v_next as
+    select * from wm.objects_v where release = wm.next();
+  
+create or replace view wm.objects_v_max as
+    select o.*
+    from	wm.objects	o
+    where	o.obj_ver = (select max(s.obj_ver) from wm.objects s where s.obj_typ = o.obj_typ and s.obj_nam = o.obj_nam);
+  
+create or replace function wm.check_drafts(orph boolean default false) returns boolean language plpgsql as $$
+  declare
+    drec	record;		-- draft object record
+    prec	record;		-- previous latest record
+    changes	boolean default false;
+  begin
+    if orph then		-- Find any orphaned objects (only works if there is at least one valid object remaining in each source file)
+      for drec in		
+        select o.*
+          from	wm.objects	o
+          join	(select distinct module, source from wm.objects where obj_ver = 0) as od on od.module = o.module and od.source = o.source
+          where 	wm.next() between o.min_rel and o.max_rel
+          and	o.source != ''
+          and	not exists (select obj_nam from wm.objects where obj_typ = o.obj_typ and obj_nam = o.obj_nam and obj_ver = 0)
+          loop
+raise notice 'Orphan: %:%', drec.obj_typ, drec.obj_nam;
+            delete from wm.objects where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam and obj_ver = drec.obj_ver;
+      end loop;
+    end if;
+
+    for drec in select * from wm.objects where obj_ver = 0 loop		-- For each newly parsed record
+      select * into prec from wm.objects_v_next where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam and obj_ver > 0;	-- Get the latest non-draft record
+      if not found then
+raise notice 'Adding: %:%', drec.obj_typ, drec.obj_nam;
+        update wm.objects set obj_ver = wm.next(), mod_date = current_timestamp where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam and obj_ver = 0;
+        continue;
+      end if;
+
+      if (drec.crt_sql  is distinct from prec.crt_sql)	or	-- Has anything important changed?
+         (drec.drp_sql  is distinct from prec.drp_sql)	or
+         (drec.deps     is distinct from prec.deps)	or
+         (drec.col_data is distinct from prec.col_data)	or
+         (drec.grants   is distinct from prec.grants)	or
+         (drec.module   is distinct from prec.module)	then
+       
+        if prec.min_rel >= wm.next() then		-- if prior record starts with the current working release, then update it with our new changes
+raise notice 'Modify: %:%', drec.obj_typ, drec.obj_nam;
+          update wm.objects set checked = false, clean = false, module = drec.module, mod_ver = drec.mod_ver, source = drec.source, deps = drec.deps, grants = drec.grants, col_data = drec.col_data, crt_sql = drec.crt_sql, drp_sql = drec.drp_sql, mod_date = current_timestamp where obj_typ = prec.obj_typ and obj_nam = prec.obj_nam and obj_ver = prec.obj_ver;
+          delete from wm.objects where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam and obj_ver = 0;
+        else						-- else, prior record belongs to earlier, committed releases, so create a new, modified record
+raise notice 'Increm: %:%', drec.obj_typ, drec.obj_nam;
+          update wm.objects set max_rel = wm.next()-1, clean = true where obj_typ = prec.obj_typ and obj_nam = prec.obj_nam and obj_ver = prec.obj_ver;
+          update wm.objects set obj_ver = prec.obj_ver + 1, checked = false, clean = false, mod_date = current_timestamp where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam and obj_ver = drec.obj_ver;
+        end if;
+      else						-- No changes from prior record, so delete the draft record
+        delete from wm.objects where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam and obj_ver = 0;
+      end if;
+    end loop;
+    return true;
+  end;
+$$;
+    
+create or replace function wm.check_deps() returns boolean language plpgsql as $$
+  declare
+    orec	record;		-- Outer loop record
+    trec	record;		-- Dependency record
+    d		text;		-- Iterator
+    darr	text[];		-- Accumulates cleaned up array
+  begin
+    for orec in select * from wm.objects_v where not checked loop
+      darr = '{}';
+      foreach d in array orec.deps loop
+          select * into trec from wm.objects_v where object = d and release = orec.release;	-- Is this a full object name?
+          if not FOUND then
+            begin
+              select * into strict trec from wm.objects_v where obj_nam = d and release = orec.release;	-- Do we only have the name, with no type?
+            exception
+              when NO_DATA_FOUND then
+                raise exception 'Dependency:% r%, by object:%, not found', d, orec.release, orec.object;
+              when TOO_MANY_ROWS then
+                raise exception 'Dependency:% r%, by object:%, not unique', d, orec.release, orec.object;
+            end;
+            d = trec.object;				-- Use fully qualified object name
+          end if;
+          darr = darr || d;
+      end loop;
+      update wm.objects set ndeps = darr, checked = true where obj_typ = orec.obj_typ and obj_nam = orec.obj_nam and obj_ver = orec.obj_ver;		-- Write out cleaned up array
+    end loop;
+    return true;
+  end;
+$$;
+
+create or replace view wm.objects_v_depth as
+  select o.*, od.depth
+  from		wm.objects_v	o
+  join		(select od_typ, od_nam, od_release, max(depth) as depth from wm.objdeps_v group by 1,2,3) od on od.od_typ = o.obj_typ and od.od_nam = o.obj_nam and od.od_release = o.release
+  order by	depth;
+
+create or replace function wm.replace(obj text) 
+  returns boolean language plpgsql as $$
+  declare
+    trec	record;
+  begin
+
+    select * into strict trec from wm.objects_v where object = obj and release = wm.next();
+    execute regexp_replace(trec.crt_sql,'create ','create or replace ','ig');
+raise notice 'Replace:% :%:', trec.depth, trec.object;
+    update wm.objects set clean = true where obj_typ = trec.obj_typ and obj_nam = trec.obj_nam and obj_ver = trec.obj_ver;
+    return true;
+  end;
+$$;
+
+create or replace function wm.make(
+    objs text[]			-- array of objects to act on
+  , drp boolean default true	-- drop objects in the specified branch
+  , crt boolean default true	-- create objects in the specified branch
+) returns int language plpgsql as $$
+  declare
+    s		text;			-- temporary string
+    trec	record;			-- temp record
+    irec	record;			-- info record
+    objlist	text[] default '{}';	-- expanded list of objects we will work on
+    collist	text;			-- list of columns to save/restore in table
+    cnt		int;			-- how many records saved/restored
+    garr	text[];			-- grant array
+    glev	text;			-- grant group_level
+    otype	text;			-- object type, coerced to table for views
+    counter	int default 0;		-- how many objects we build
+    sess_id	text default (select to_hex(trunc(extract (epoch from backend_start))::integer)||'.'||to_hex(pid) from pg_stat_activity where pid = pg_backend_pid());
+  begin
+    if objs is null then		-- Defaults to drop/create of all unclean objects
+      objs = '{}';
+      for s in select object from wm.objects_v where not clean loop
+        objs = objs || s;
+      end loop;
+    end if;
+  
+    foreach s in array objs loop	-- for each specified object, expand to dependent objects
+      objlist = objlist || array(select distinct object from wm.objdeps_v where s = any(fpath) and od_release = wm.next());
+    end loop;
+    create temporary table _table_info (obj_nam text primary key, columns text, fname text, rows int);
+
+    if drp then			-- Drop specified objects
+      for trec in select * from wm.objects_v_depth where object = any(objlist) and release = wm.next() order by depth desc loop
+raise notice 'Drop:% :%:', trec.depth, trec.object;
+
+        if trec.obj_typ = 'table' then
+          begin
+            execute 'select count(*) from ' || trec.obj_nam || ';' into strict cnt;
+            exception when undefined_table then
+              raise notice 'Skipping non-existant: %:%', trec.obj_typ, trec.obj_nam;
+              continue;
+          end;
+          perform wm.migrate(trec.obj_nam, trec.delta);		-- Need to modify table?
+        end if;
+        if trec.obj_typ = 'table' and cnt > 0 then		-- Attempt to preserve existing table data
+          collist = array_to_string(array(select column_name::text from information_schema.columns where table_schema || '.' || table_name = trec.obj_nam order by ordinal_position),',');
+          s = wm.workdir(sess_id) || '/' || trec.obj_nam || '.dump';
+          execute 'copy ' || trec.obj_nam || '(' || collist || ') to ''' || s || '''';
+          get diagnostics cnt = ROW_COUNT;
+          insert into _table_info (obj_nam,columns,fname,rows) values (trec.obj_nam, collist, s, cnt);
+        end if;
+
+        execute trec.drp_sql;
+      end loop;
+    end if;
+
+    if crt then			-- Create specified objects
+      for trec in select * from wm.objects_v_depth where object = any(objlist) and release = wm.next() order by depth loop
+raise notice 'Create:% :%:', trec.depth, trec.object;
+        execute trec.crt_sql;
+        
+        if trec.obj_typ = 'table' then		-- Attempt to restore data into the table
+          select * into irec from _table_info i where i.obj_nam = trec.obj_nam;
+          if FOUND then
+            execute 'copy ' || trec.obj_nam || '(' || irec.columns || ') from ''' || irec.fname || '''';
+            execute 'select count(*) from ' || trec.obj_nam || ';' into strict cnt;
+            if cnt != irec.rows then
+              raise exception 'Restored % records to table % when % had been saved', cnt, trec.obj_nam, irec.rows;
+            end if;
+          end if;
+        end if;
+        
+        foreach s in array trec.grants loop	-- for each specified object, expand to dependent objects
+          garr = string_to_array(s,',');
+          glev = garr[2] || '_' || garr[3];
+          if garr[2] = 'public' then
+            glev = garr[2];
+          else
+            perform wm.create_role(glev);
+          end if;
+          otype = trec.obj_typ; if otype = 'view' then otype = 'table'; end if;
+          execute 'grant ' || garr[4] || ' on ' || otype || ' ' || trec.obj_nam || ' to ' || glev || ';'; 
+        end loop;
+        update wm.objects set clean = true where obj_typ = trec.obj_typ and obj_nam = trec.obj_nam and obj_ver = trec.obj_ver;
+        counter = counter + 1;
+      end loop;
+    end if;
+
+    drop table _table_info;
+    return counter;
+  end;
+$$;
+
+create or replace function wm.migrate(objname text, migs jsonb) 
+  returns boolean language plpgsql as $$
+  declare
+    cmd		jsonb;
+    sql		text;
+    i		int default 0;
+  begin
+
+    if migs isnull then return true; end if;
+
+    for cmd in select * from jsonb_array_elements(migs) loop		-- for each migration command
+      if cmd->'dirty' isnull or not (cmd->'dirty')::boolean then continue; end if;		-- only process commands not yet done
+      if cmd->>'oper' = 'drop' then
+raise notice 'Migrate: drop % column:%', objname, cmd->>'col';
+        sql = 'alter table ' || objname || ' drop column ' || (cmd->>'col') || ';';
+      elsif cmd->>'oper' = 'rename' then
+raise notice 'Migrate: rename % column:% to:%', objname, cmd->>'col', cmd->>'spec';
+        sql = 'alter table ' || objname || ' rename column ' || (cmd->>'col') || ' to ' || (cmd->>'spec') || ';';
+        null;
+      elsif cmd->>'oper' = 'update' then
+raise notice 'Migrate: update % column:% =:%', objname, cmd->>'col', cmd->>'spec';
+        sql = 'update ' || objname || ' set ' || (cmd->>'col') || ' = ' || (cmd->>'spec') || ';';
+      else
+        null;
+      end if;
+      execute sql;
+      cmd = cmd - 'dirty';		-- remove dirty flag
+      migs = jsonb_set(migs, ('{' || i || '}')::text[], cmd);
+      i = i + 1;
+    end loop;
+    update wm.objects_v_max set delta = migs where obj_typ = 'table' and obj_nam = objname;
+    return true;
+  end;
+$$;
+
 
 --Schema:
 create type audit_type as enum ('update','delete');
@@ -170,6 +546,7 @@ create view wm.view_column_usage as select * from information_schema.view_column
 grant select on table wm.view_column_usage to public;
 create schema wylib;
 grant usage on schema wylib to public;
+create schema wyseman;
 create table base.country (
 code	varchar(2)	primary key
   , com_name	text		not null unique
@@ -324,6 +701,13 @@ create function wylib.data_tf_notify() returns trigger language plpgsql security
       return null;
     end;
 $$;
+create table wyseman.items (
+name	text
+  , version	int
+  , released	date
+  , comment	text
+  , primary key (name, version)
+);
 create table base.ent (
 id		text		primary key
   , ent_num	int		not null check(ent_num > 0)
@@ -600,7 +984,7 @@ create function base.ent_tf_iuacc() returns trigger language plpgsql security de
 
       if new.username is not null and not exists (select rolname from pg_roles where rolname = new.username) then
 
-        execute 'create role ' || '"' || new.username || '"' login;
+        execute 'create role ' || '"' || new.username || '" login';
         for trec in select * from base.priv where grantee = new.username loop
           execute 'grant "' || trec.priv_level || '" to ' || trec.grantee;
         end loop;
@@ -1630,7 +2014,8 @@ insert into wm.table_text (tt_sch,tt_tab,language,title,help) values
   ('wm','view_column_usage','eng','View Column Usage','A version of a similar view in the information schema but faster.  For each view, tells what underlying table and column the view column uses.'),
   ('wylib','data','eng','GUI Data','Configuration and preferences data accessed by Wylib view widgets'),
   ('wylib','data','fin','GUI Data','Wylib-näkymäkomponenttien käyttämät konfigurointi- ja asetustiedot'),
-  ('wylib','data_v','eng','GUI Data','A view of configuration and preferences data accessed by Wylib view widgets');
+  ('wylib','data_v','eng','GUI Data','A view of configuration and preferences data accessed by Wylib view widgets'),
+  ('wyseman','items','eng','Items','Table contains hypothetical items');
 insert into wm.column_text (ct_sch,ct_tab,ct_col,language,title,help) values
   ('base','addr','addr_cmt','eng','Comment','Any other notes about this address'),
   ('base','addr','addr_ent','eng','Entity ID','The ID number of the entity this address applies to'),
@@ -2016,7 +2401,11 @@ insert into wm.column_text (ct_sch,ct_tab,ct_col,language,title,help) values
   ('wylib','data','owner','eng','Owner','The user entity who created and has full permission to the data in this record'),
   ('wylib','data','ruid','eng','Record ID','A unique ID number generated for each data record'),
   ('wylib','data','ruid','fin','Tunnistaa','Kullekin datatietueelle tuotettu yksilöllinen ID-numero'),
-  ('wylib','data_v','own_name','eng','Owner Name','The name of the person who saved this configuration data');
+  ('wylib','data_v','own_name','eng','Owner Name','The name of the person who saved this configuration data'),
+  ('wyseman','items','comment','eng','Additional Info','Notes about the item'),
+  ('wyseman','items','name','eng','Item Name','The item name'),
+  ('wyseman','items','released','eng','Released','When it was released'),
+  ('wyseman','items','version','eng','Version','The item''s version');
 insert into wm.value_text (vt_sch,vt_tab,vt_col,value,language,title,help) values
   ('base','addr','addr_type','bill','eng','Billing','Where invoices and other accounting information are sent'),
   ('base','addr','addr_type','mail','eng','Mailing','Where mail and correspondence is received'),
@@ -2247,13 +2636,506 @@ insert into wm.message_text (mt_sch,mt_tab,code,language,title,help) values
   ('wylib','data','X.dbpColSel','eng','Visible Columns','Show or hide individual columns'),
   ('wylib','data','X.dbpFooter','eng','Footer','Check the box to turn on column summaries, at the bottom');
 insert into wm.table_style (ts_sch,ts_tab,sw_name,sw_value,inherit) values
+  ('base','addr','focus','"addr_spec"','t'),
+  ('base','addr_v','display','["addr_type","addr_spec","state","city","pcode","country","addr_cmt","addr_seq"]','t'),
+  ('base','comm','focus','"comm_spec"','t'),
+  ('base','comm_v','display','["comm_type","comm_spec","comm_cmt","comm_seq"]','t'),
+  ('base','ent','display','["id","ent_type","ent_name","fir_name","born_date"]','t'),
+  ('base','ent','focus','"ent_name"','t'),
+  ('base','ent_link','focus','"org_id"','t'),
+  ('base','ent_v','actions','[{"name":"directory"}]','f'),
+  ('base','ent_v','subviews','["base.addr_v","base.comm_v","base.priv_v"]','t'),
+  ('base','ent_v_pub','focus','"ent_name"','t'),
+  ('base','parm_v','display','["module","parm","type","value","cmt"]','t'),
+  ('base','parm_v','focus','"module"','t'),
+  ('base','priv','focus','"priv"','t'),
+  ('base','priv_v','actions','[{"name":"suspend"}]','f'),
   ('wm','column_pub','focus','"code"','t'),
   ('wm','column_text','focus','"code"','t'),
   ('wm','message_text','focus','"code"','t'),
   ('wm','objects','focus','"obj_nam"','t'),
   ('wm','table_text','focus','"code"','t'),
-  ('wm','value_text','focus','"code"','t');
+  ('wm','value_text','focus','"code"','t'),
+  ('wylib','data','display','["ruid","component","name","descr","owner","access"]','t'),
+  ('wylib','data_v','display','["ruid","component","name","descr","own_name","access"]','t'),
+  ('wyseman','contracts','focus','"domain"','t');
 insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) values
+  ('base','addr','addr_cmt','input','ent'),
+  ('base','addr','addr_cmt','size','50'),
+  ('base','addr','addr_cmt','special','edw'),
+  ('base','addr','addr_cmt','subframe','1 5 4'),
+  ('base','addr','addr_ent','input','ent'),
+  ('base','addr','addr_ent','justify','r'),
+  ('base','addr','addr_ent','optional','1'),
+  ('base','addr','addr_ent','size','5'),
+  ('base','addr','addr_ent','state','readonly'),
+  ('base','addr','addr_ent','subframe','1 6'),
+  ('base','addr','addr_inact','initial','false'),
+  ('base','addr','addr_inact','input','chk'),
+  ('base','addr','addr_inact','size','2'),
+  ('base','addr','addr_inact','subframe','2 3'),
+  ('base','addr','addr_seq','hide','1'),
+  ('base','addr','addr_seq','input','ent'),
+  ('base','addr','addr_seq','justify','r'),
+  ('base','addr','addr_seq','size','4'),
+  ('base','addr','addr_seq','state','readonly'),
+  ('base','addr','addr_seq','subframe','10 1'),
+  ('base','addr','addr_seq','write','0'),
+  ('base','addr','addr_spec','input','ent'),
+  ('base','addr','addr_spec','size','30'),
+  ('base','addr','addr_spec','special','edw'),
+  ('base','addr','addr_spec','subframe','1 2 2'),
+  ('base','addr','addr_type','initial','mail'),
+  ('base','addr','addr_type','input','pdm'),
+  ('base','addr','addr_type','size','6'),
+  ('base','addr','addr_type','subframe','1 3'),
+  ('base','addr','city','input','ent'),
+  ('base','addr','city','size','24'),
+  ('base','addr','city','subframe','2 1'),
+  ('base','addr','country','data','country'),
+  ('base','addr','country','input','ent'),
+  ('base','addr','country','size','4'),
+  ('base','addr','country','special','scm'),
+  ('base','addr','country','subframe','3 2'),
+  ('base','addr','crt_by','input','ent'),
+  ('base','addr','crt_by','optional','1'),
+  ('base','addr','crt_by','size','10'),
+  ('base','addr','crt_by','state','readonly'),
+  ('base','addr','crt_by','subframe','1 98'),
+  ('base','addr','crt_by','write','0'),
+  ('base','addr','crt_date','input','inf'),
+  ('base','addr','crt_date','optional','1'),
+  ('base','addr','crt_date','size','18'),
+  ('base','addr','crt_date','state','readonly'),
+  ('base','addr','crt_date','subframe','2 98'),
+  ('base','addr','crt_date','write','0'),
+  ('base','addr','dirty','hide','1'),
+  ('base','addr','dirty','input','chk'),
+  ('base','addr','dirty','size','2'),
+  ('base','addr','dirty','subframe',''),
+  ('base','addr','dirty','write','0'),
+  ('base','addr','mod_by','input','ent'),
+  ('base','addr','mod_by','optional','1'),
+  ('base','addr','mod_by','size','10'),
+  ('base','addr','mod_by','state','readonly'),
+  ('base','addr','mod_by','subframe','1 99'),
+  ('base','addr','mod_by','write','0'),
+  ('base','addr','mod_date','input','inf'),
+  ('base','addr','mod_date','optional','1'),
+  ('base','addr','mod_date','size','18'),
+  ('base','addr','mod_date','state','readonly'),
+  ('base','addr','mod_date','subframe','2 99'),
+  ('base','addr','mod_date','write','0'),
+  ('base','addr','pcode','focus','true'),
+  ('base','addr','pcode','input','ent'),
+  ('base','addr','pcode','size','10'),
+  ('base','addr','pcode','special','zip'),
+  ('base','addr','pcode','subframe','1 1'),
+  ('base','addr','physical','initial','true'),
+  ('base','addr','physical','input','chk'),
+  ('base','addr','physical','size','2'),
+  ('base','addr','physical','subframe','3 3'),
+  ('base','addr','state','data','state'),
+  ('base','addr','state','input','ent'),
+  ('base','addr','state','size','4'),
+  ('base','addr','state','special','scm'),
+  ('base','addr','state','subframe','3 1'),
+  ('base','addr_v','addr_cmt','display','7'),
+  ('base','addr_v','addr_prim','initial','false'),
+  ('base','addr_v','addr_prim','input','chk'),
+  ('base','addr_v','addr_prim','size','2'),
+  ('base','addr_v','addr_prim','state','readonly'),
+  ('base','addr_v','addr_prim','subframe','3 3'),
+  ('base','addr_v','addr_prim','write','0'),
+  ('base','addr_v','addr_seq','display','8'),
+  ('base','addr_v','addr_seq','sort','2'),
+  ('base','addr_v','addr_spec','display','2'),
+  ('base','addr_v','addr_type','display','1'),
+  ('base','addr_v','addr_type','sort','1'),
+  ('base','addr_v','city','display','4'),
+  ('base','addr_v','country','display','6'),
+  ('base','addr_v','pcode','display','5'),
+  ('base','addr_v','state','display','3'),
+  ('base','addr_v','std_name','depend','addr_ent'),
+  ('base','addr_v','std_name','in','addr_ent'),
+  ('base','addr_v','std_name','input','ent'),
+  ('base','addr_v','std_name','optional','1'),
+  ('base','addr_v','std_name','size','14'),
+  ('base','addr_v','std_name','subframe','2 6 2'),
+  ('base','addr_v','std_name','title',':'),
+  ('base','comm','comm_cmt','input','ent'),
+  ('base','comm','comm_cmt','size','50'),
+  ('base','comm','comm_cmt','special','edw'),
+  ('base','comm','comm_cmt','subframe','1 3 3'),
+  ('base','comm','comm_ent','input','ent'),
+  ('base','comm','comm_ent','justify','r'),
+  ('base','comm','comm_ent','optional','1'),
+  ('base','comm','comm_ent','size','5'),
+  ('base','comm','comm_ent','state','readonly'),
+  ('base','comm','comm_ent','subframe','1 5'),
+  ('base','comm','comm_inact','initial','false'),
+  ('base','comm','comm_inact','input','chk'),
+  ('base','comm','comm_inact','offvalue','false'),
+  ('base','comm','comm_inact','onvalue','true'),
+  ('base','comm','comm_inact','size','2'),
+  ('base','comm','comm_inact','subframe','2 2'),
+  ('base','comm','comm_seq','hide','1'),
+  ('base','comm','comm_seq','input','ent'),
+  ('base','comm','comm_seq','justify','r'),
+  ('base','comm','comm_seq','size','5'),
+  ('base','comm','comm_seq','state','readonly'),
+  ('base','comm','comm_seq','subframe','0 1'),
+  ('base','comm','comm_seq','write','0'),
+  ('base','comm','comm_spec','focus','true'),
+  ('base','comm','comm_spec','input','ent'),
+  ('base','comm','comm_spec','size','28'),
+  ('base','comm','comm_spec','subframe','1 1 3'),
+  ('base','comm','comm_type','initial','phone'),
+  ('base','comm','comm_type','input','pdm'),
+  ('base','comm','comm_type','size','5'),
+  ('base','comm','comm_type','subframe','1 2'),
+  ('base','comm','crt_by','input','ent'),
+  ('base','comm','crt_by','optional','1'),
+  ('base','comm','crt_by','size','10'),
+  ('base','comm','crt_by','state','readonly'),
+  ('base','comm','crt_by','subframe','1 98'),
+  ('base','comm','crt_by','write','0'),
+  ('base','comm','crt_date','input','inf'),
+  ('base','comm','crt_date','optional','1'),
+  ('base','comm','crt_date','size','18'),
+  ('base','comm','crt_date','state','readonly'),
+  ('base','comm','crt_date','subframe','2 98'),
+  ('base','comm','crt_date','write','0'),
+  ('base','comm','mod_by','input','ent'),
+  ('base','comm','mod_by','optional','1'),
+  ('base','comm','mod_by','size','10'),
+  ('base','comm','mod_by','state','readonly'),
+  ('base','comm','mod_by','subframe','1 99'),
+  ('base','comm','mod_by','write','0'),
+  ('base','comm','mod_date','input','inf'),
+  ('base','comm','mod_date','optional','1'),
+  ('base','comm','mod_date','size','18'),
+  ('base','comm','mod_date','state','readonly'),
+  ('base','comm','mod_date','subframe','2 99'),
+  ('base','comm','mod_date','write','0'),
+  ('base','comm_v','comm_cmt','display','3'),
+  ('base','comm_v','comm_prim','initial','false'),
+  ('base','comm_v','comm_prim','input','chk'),
+  ('base','comm_v','comm_prim','offvalue','f'),
+  ('base','comm_v','comm_prim','onvalue','t'),
+  ('base','comm_v','comm_prim','size','2'),
+  ('base','comm_v','comm_prim','state','readonly'),
+  ('base','comm_v','comm_prim','subframe','3 2'),
+  ('base','comm_v','comm_prim','write','0'),
+  ('base','comm_v','comm_seq','display','4'),
+  ('base','comm_v','comm_seq','sort','2'),
+  ('base','comm_v','comm_spec','display','2'),
+  ('base','comm_v','comm_type','display','1'),
+  ('base','comm_v','comm_type','sort','1'),
+  ('base','comm_v','std_name','depend','comm_ent'),
+  ('base','comm_v','std_name','in','comm_ent'),
+  ('base','comm_v','std_name','input','ent'),
+  ('base','comm_v','std_name','optional','1'),
+  ('base','comm_v','std_name','size','14'),
+  ('base','comm_v','std_name','subframe','2 5 2'),
+  ('base','comm_v','std_name','title',':'),
+  ('base','ent','bank','hint','####:#### or ####:####:s'),
+  ('base','ent','bank','input','ent'),
+  ('base','ent','bank','size','14'),
+  ('base','ent','bank','subframe','1 5'),
+  ('base','ent','bank','template',E'^(|\\d+:\\d+|\\d+:\\d+:\\d+)$'),
+  ('base','ent','born_date','display','5'),
+  ('base','ent','born_date','hint','date'),
+  ('base','ent','born_date','input','ent'),
+  ('base','ent','born_date','size','11'),
+  ('base','ent','born_date','special','cal'),
+  ('base','ent','born_date','subframe','1 4'),
+  ('base','ent','born_date','template','date'),
+  ('base','ent','conn_key','input','ent'),
+  ('base','ent','conn_key','size','8'),
+  ('base','ent','conn_key','subframe','3 5'),
+  ('base','ent','conn_key','write','0'),
+  ('base','ent','country','data','country'),
+  ('base','ent','country','input','ent'),
+  ('base','ent','country','size','4'),
+  ('base','ent','country','special','scm'),
+  ('base','ent','country','subframe','2 6'),
+  ('base','ent','crt_by','input','ent'),
+  ('base','ent','crt_by','optional','1'),
+  ('base','ent','crt_by','size','10'),
+  ('base','ent','crt_by','state','readonly'),
+  ('base','ent','crt_by','subframe','1 98'),
+  ('base','ent','crt_by','write','0'),
+  ('base','ent','crt_date','input','inf'),
+  ('base','ent','crt_date','optional','1'),
+  ('base','ent','crt_date','size','18'),
+  ('base','ent','crt_date','state','readonly'),
+  ('base','ent','crt_date','subframe','2 98'),
+  ('base','ent','crt_date','write','0'),
+  ('base','ent','ent_cmt','input','mle'),
+  ('base','ent','ent_cmt','size','80'),
+  ('base','ent','ent_cmt','special','edw'),
+  ('base','ent','ent_cmt','subframe','1 7 3'),
+  ('base','ent','ent_inact','initial','f'),
+  ('base','ent','ent_inact','input','chk'),
+  ('base','ent','ent_inact','offvalue','f'),
+  ('base','ent','ent_inact','onvalue','t'),
+  ('base','ent','ent_inact','size','2'),
+  ('base','ent','ent_inact','subframe','3 3'),
+  ('base','ent','ent_name','display','3'),
+  ('base','ent','ent_name','focus','true'),
+  ('base','ent','ent_name','input','ent'),
+  ('base','ent','ent_name','size','40'),
+  ('base','ent','ent_name','subframe','1 1 2'),
+  ('base','ent','ent_name','template',E'^[\\w\\. ]+$'),
+  ('base','ent','ent_type','display','2'),
+  ('base','ent','ent_type','initial','p'),
+  ('base','ent','ent_type','input','pdm'),
+  ('base','ent','ent_type','size','2'),
+  ('base','ent','ent_type','subframe','3 1'),
+  ('base','ent','fir_name','background','#e0f0ff'),
+  ('base','ent','fir_name','display','4'),
+  ('base','ent','fir_name','input','ent'),
+  ('base','ent','fir_name','size','14'),
+  ('base','ent','fir_name','subframe','2 2'),
+  ('base','ent','fir_name','template','alpha'),
+  ('base','ent','gender','initial',''),
+  ('base','ent','gender','input','pdm'),
+  ('base','ent','gender','size','2'),
+  ('base','ent','gender','subframe','2 4'),
+  ('base','ent','id','display','1'),
+  ('base','ent','id','hide','1'),
+  ('base','ent','id','input','ent'),
+  ('base','ent','id','justify','r'),
+  ('base','ent','id','size','7'),
+  ('base','ent','id','subframe','0 1'),
+  ('base','ent','id','write','0'),
+  ('base','ent','marital','initial',''),
+  ('base','ent','marital','input','pdm'),
+  ('base','ent','marital','size','2'),
+  ('base','ent','marital','subframe','3 4'),
+  ('base','ent','mid_name','input','ent'),
+  ('base','ent','mid_name','size','12'),
+  ('base','ent','mid_name','subframe','3 2'),
+  ('base','ent','mid_name','template','alpha'),
+  ('base','ent','mod_by','input','ent'),
+  ('base','ent','mod_by','optional','1'),
+  ('base','ent','mod_by','size','10'),
+  ('base','ent','mod_by','state','readonly'),
+  ('base','ent','mod_by','subframe','1 99'),
+  ('base','ent','mod_by','write','0'),
+  ('base','ent','mod_date','input','inf'),
+  ('base','ent','mod_date','optional','1'),
+  ('base','ent','mod_date','size','18'),
+  ('base','ent','mod_date','state','readonly'),
+  ('base','ent','mod_date','subframe','2 99'),
+  ('base','ent','mod_date','write','0'),
+  ('base','ent','pref_name','input','ent'),
+  ('base','ent','pref_name','size','12'),
+  ('base','ent','pref_name','subframe','1 3'),
+  ('base','ent','pref_name','template','alpha'),
+  ('base','ent','tax_id','hint','###-##-####'),
+  ('base','ent','tax_id','input','ent'),
+  ('base','ent','tax_id','size','10'),
+  ('base','ent','tax_id','subframe','1 6'),
+  ('base','ent','title','input','ent'),
+  ('base','ent','title','size','8'),
+  ('base','ent','title','special','exs'),
+  ('base','ent','title','subframe','1 2'),
+  ('base','ent','title','template',E'^[a-zA-Z\\.]*$'),
+  ('base','ent','username','input','ent'),
+  ('base','ent','username','size','12'),
+  ('base','ent','username','subframe','2 5'),
+  ('base','ent','username','template','alnum'),
+  ('base','ent_link','mem','input','ent'),
+  ('base','ent_link','mem','justify','r'),
+  ('base','ent_link','mem','size','6'),
+  ('base','ent_link','mem','subframe','1 2'),
+  ('base','ent_link','org','input','ent'),
+  ('base','ent_link','org','justify','r'),
+  ('base','ent_link','org','size','6'),
+  ('base','ent_link','org','subframe','1 1'),
+  ('base','ent_link','org_id','focus','true'),
+  ('base','ent_link','role','input','ent'),
+  ('base','ent_link','role','size','30'),
+  ('base','ent_link','role','special','exs'),
+  ('base','ent_link','role','subframe','1 3'),
+  ('base','ent_link_v','mem_name','depend','mem_id'),
+  ('base','ent_link_v','mem_name','in','mem_id'),
+  ('base','ent_link_v','mem_name','input','ent'),
+  ('base','ent_link_v','mem_name','size','30'),
+  ('base','ent_link_v','mem_name','subframe',''),
+  ('base','ent_link_v','mem_name','title',':'),
+  ('base','ent_link_v','org_name','depend','org_id'),
+  ('base','ent_link_v','org_name','in','org_id'),
+  ('base','ent_link_v','org_name','input','ent'),
+  ('base','ent_link_v','org_name','size','30'),
+  ('base','ent_link_v','org_name','subframe',''),
+  ('base','ent_link_v','org_name','title',':'),
+  ('base','ent_v','age','input','ent'),
+  ('base','ent_v','age','optional','1'),
+  ('base','ent_v','age','size','4'),
+  ('base','ent_v','age','state','readonly'),
+  ('base','ent_v','age','subframe','3 8'),
+  ('base','ent_v','age','write','0'),
+  ('base','ent_v','cas_name','input','ent'),
+  ('base','ent_v','cas_name','optional','1'),
+  ('base','ent_v','cas_name','size','10'),
+  ('base','ent_v','cas_name','state','readonly'),
+  ('base','ent_v','cas_name','subframe','1 9'),
+  ('base','ent_v','cas_name','write','0'),
+  ('base','ent_v','frm_name','input','ent'),
+  ('base','ent_v','frm_name','optional','1'),
+  ('base','ent_v','frm_name','size','18'),
+  ('base','ent_v','frm_name','state','readonly'),
+  ('base','ent_v','frm_name','subframe','2 8'),
+  ('base','ent_v','frm_name','write','0'),
+  ('base','ent_v','giv_name','input','ent'),
+  ('base','ent_v','giv_name','optional','1'),
+  ('base','ent_v','giv_name','size','10'),
+  ('base','ent_v','giv_name','state','readonly'),
+  ('base','ent_v','giv_name','subframe','2 9'),
+  ('base','ent_v','giv_name','write','0'),
+  ('base','ent_v','std_name','input','ent'),
+  ('base','ent_v','std_name','optional','1'),
+  ('base','ent_v','std_name','size','18'),
+  ('base','ent_v','std_name','state','readonly'),
+  ('base','ent_v','std_name','subframe','1 8'),
+  ('base','ent_v','std_name','write','0'),
+  ('base','ent_v_pub','activ','initial','t'),
+  ('base','ent_v_pub','activ','input','chk'),
+  ('base','ent_v_pub','activ','offvalue','f'),
+  ('base','ent_v_pub','activ','onvalue','t'),
+  ('base','ent_v_pub','activ','size','2'),
+  ('base','ent_v_pub','activ','state','readonly'),
+  ('base','ent_v_pub','activ','subframe','1 5'),
+  ('base','ent_v_pub','crt_by','input','ent'),
+  ('base','ent_v_pub','crt_by','optional','1'),
+  ('base','ent_v_pub','crt_by','size','10'),
+  ('base','ent_v_pub','crt_by','state','readonly'),
+  ('base','ent_v_pub','crt_by','subframe','2 6'),
+  ('base','ent_v_pub','crt_by','write','0'),
+  ('base','ent_v_pub','crt_date','input','ent'),
+  ('base','ent_v_pub','crt_date','optional','1'),
+  ('base','ent_v_pub','crt_date','size','20'),
+  ('base','ent_v_pub','crt_date','state','readonly'),
+  ('base','ent_v_pub','crt_date','subframe','1 6'),
+  ('base','ent_v_pub','crt_date','write','0'),
+  ('base','ent_v_pub','ent_name','focus','true'),
+  ('base','ent_v_pub','id','hide','1'),
+  ('base','ent_v_pub','id','input','ent'),
+  ('base','ent_v_pub','id','justify','r'),
+  ('base','ent_v_pub','id','size','6'),
+  ('base','ent_v_pub','id','subframe','0 1'),
+  ('base','ent_v_pub','id','write','0'),
+  ('base','ent_v_pub','mod_by','input','ent'),
+  ('base','ent_v_pub','mod_by','optional','1'),
+  ('base','ent_v_pub','mod_by','size','10'),
+  ('base','ent_v_pub','mod_by','state','readonly'),
+  ('base','ent_v_pub','mod_by','subframe','4 6'),
+  ('base','ent_v_pub','mod_by','write','0'),
+  ('base','ent_v_pub','mod_date','input','ent'),
+  ('base','ent_v_pub','mod_date','optional','1'),
+  ('base','ent_v_pub','mod_date','size','20'),
+  ('base','ent_v_pub','mod_date','state','readonly'),
+  ('base','ent_v_pub','mod_date','subframe','3 6'),
+  ('base','ent_v_pub','mod_date','write','0'),
+  ('base','ent_v_pub','name','input','ent'),
+  ('base','ent_v_pub','name','size','40'),
+  ('base','ent_v_pub','name','state','readonly'),
+  ('base','ent_v_pub','name','subframe','1 1 2'),
+  ('base','ent_v_pub','type','input','ent'),
+  ('base','ent_v_pub','type','size','2'),
+  ('base','ent_v_pub','type','state','readonly'),
+  ('base','ent_v_pub','type','subframe','1 2'),
+  ('base','ent_v_pub','username','input','ent'),
+  ('base','ent_v_pub','username','size','12'),
+  ('base','ent_v_pub','username','state','readonly'),
+  ('base','ent_v_pub','username','subframe','2 2'),
+  ('base','parm_v','cmt','display','5'),
+  ('base','parm_v','cmt','input','ent'),
+  ('base','parm_v','cmt','size','50'),
+  ('base','parm_v','cmt','special','edw'),
+  ('base','parm_v','cmt','subframe','1 3 2'),
+  ('base','parm_v','crt_by','input','ent'),
+  ('base','parm_v','crt_by','optional','1'),
+  ('base','parm_v','crt_by','size','10'),
+  ('base','parm_v','crt_by','state','readonly'),
+  ('base','parm_v','crt_by','subframe','1 98'),
+  ('base','parm_v','crt_by','write','0'),
+  ('base','parm_v','crt_date','input','inf'),
+  ('base','parm_v','crt_date','optional','1'),
+  ('base','parm_v','crt_date','size','18'),
+  ('base','parm_v','crt_date','state','readonly'),
+  ('base','parm_v','crt_date','subframe','2 98'),
+  ('base','parm_v','crt_date','write','0'),
+  ('base','parm_v','mod_by','input','ent'),
+  ('base','parm_v','mod_by','optional','1'),
+  ('base','parm_v','mod_by','size','10'),
+  ('base','parm_v','mod_by','state','readonly'),
+  ('base','parm_v','mod_by','subframe','1 99'),
+  ('base','parm_v','mod_by','write','0'),
+  ('base','parm_v','mod_date','input','inf'),
+  ('base','parm_v','mod_date','optional','1'),
+  ('base','parm_v','mod_date','size','18'),
+  ('base','parm_v','mod_date','state','readonly'),
+  ('base','parm_v','mod_date','subframe','2 99'),
+  ('base','parm_v','mod_date','write','0'),
+  ('base','parm_v','module','display','1'),
+  ('base','parm_v','module','focus','true'),
+  ('base','parm_v','module','input','ent'),
+  ('base','parm_v','module','size','12'),
+  ('base','parm_v','module','special','exs'),
+  ('base','parm_v','module','subframe','1 1'),
+  ('base','parm_v','parm','display','2'),
+  ('base','parm_v','parm','input','ent'),
+  ('base','parm_v','parm','size','24'),
+  ('base','parm_v','parm','subframe','2 1'),
+  ('base','parm_v','type','display','3'),
+  ('base','parm_v','type','initial','text'),
+  ('base','parm_v','type','input','pdm'),
+  ('base','parm_v','type','size','6'),
+  ('base','parm_v','type','subframe','1 2'),
+  ('base','parm_v','value','display','4'),
+  ('base','parm_v','value','hot','1'),
+  ('base','parm_v','value','input','ent'),
+  ('base','parm_v','value','size','24'),
+  ('base','parm_v','value','special','edw'),
+  ('base','parm_v','value','subframe','2 2'),
+  ('base','priv','cmt','input','ent'),
+  ('base','priv','cmt','size','30'),
+  ('base','priv','cmt','subframe','1 1 2'),
+  ('base','priv','grantee','input','ent'),
+  ('base','priv','grantee','size','12'),
+  ('base','priv','grantee','state','readonly'),
+  ('base','priv','grantee','subframe','0 0'),
+  ('base','priv','level','initial','2'),
+  ('base','priv','level','input','ent'),
+  ('base','priv','level','justify','r'),
+  ('base','priv','level','size','4'),
+  ('base','priv','level','subframe','2 0'),
+  ('base','priv','priv','focus','true'),
+  ('base','priv','priv','input','ent'),
+  ('base','priv','priv','size','12'),
+  ('base','priv','priv','special','exs'),
+  ('base','priv','priv','subframe','1 0'),
+  ('base','priv','priv_level','input','ent'),
+  ('base','priv','priv_level','size','10'),
+  ('base','priv','priv_level','state','readonly'),
+  ('base','priv','priv_level','subframe','0 1'),
+  ('base','priv','priv_level','write','0'),
+  ('base','priv_v','priv_list','input','ent'),
+  ('base','priv_v','priv_list','optional','1'),
+  ('base','priv_v','priv_list','size','48'),
+  ('base','priv_v','priv_list','state','disabled'),
+  ('base','priv_v','priv_list','subframe','1 2 2'),
+  ('base','priv_v','priv_list','write','0'),
+  ('base','priv_v','std_name','input','ent'),
+  ('base','priv_v','std_name','optional','1'),
+  ('base','priv_v','std_name','size','24'),
+  ('base','priv_v','std_name','state','disabled'),
+  ('base','priv_v','std_name','subframe','0 2'),
+  ('base','priv_v','std_name','write','0'),
   ('wm','column_pub','code','focus','true'),
   ('wm','column_pub','help','size','40'),
   ('wm','column_pub','help','special','edw'),
@@ -2297,7 +3179,79 @@ insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) values
   ('wm','value_text','help','size','40'),
   ('wm','value_text','help','special','edw'),
   ('wm','value_text','language','size','4'),
-  ('wm','value_text','title','size','40');
+  ('wm','value_text','title','size','40'),
+  ('wylib','data','access','display','6'),
+  ('wylib','data','access','input','ent'),
+  ('wylib','data','access','size','6'),
+  ('wylib','data','access','subframe','2 3'),
+  ('wylib','data','component','display','2'),
+  ('wylib','data','component','input','ent'),
+  ('wylib','data','component','size','20'),
+  ('wylib','data','component','subframe','2 1'),
+  ('wylib','data','crt_by','input','ent'),
+  ('wylib','data','crt_by','optional','1'),
+  ('wylib','data','crt_by','size','14'),
+  ('wylib','data','crt_by','state','disabled'),
+  ('wylib','data','crt_by','subframe','1 6'),
+  ('wylib','data','crt_date','input','ent'),
+  ('wylib','data','crt_date','optional','1'),
+  ('wylib','data','crt_date','size','14'),
+  ('wylib','data','crt_date','state','disabled'),
+  ('wylib','data','crt_date','subframe','1 6'),
+  ('wylib','data','data','input','mle'),
+  ('wylib','data','data','size','80'),
+  ('wylib','data','data','state','disabled'),
+  ('wylib','data','data','subframe','1 4 3'),
+  ('wylib','data','descr','display','4'),
+  ('wylib','data','descr','input','ent'),
+  ('wylib','data','descr','size','40'),
+  ('wylib','data','descr','subframe','4 2 3'),
+  ('wylib','data','mod_by','input','ent'),
+  ('wylib','data','mod_by','optional','1'),
+  ('wylib','data','mod_by','size','14'),
+  ('wylib','data','mod_by','state','disabled'),
+  ('wylib','data','mod_by','subframe','2 7'),
+  ('wylib','data','mod_date','input','ent'),
+  ('wylib','data','mod_date','optional','1'),
+  ('wylib','data','mod_date','size','14'),
+  ('wylib','data','mod_date','state','disabled'),
+  ('wylib','data','mod_date','subframe','2 7'),
+  ('wylib','data','name','display','3'),
+  ('wylib','data','name','input','ent'),
+  ('wylib','data','name','size','16'),
+  ('wylib','data','name','subframe','3 1 2'),
+  ('wylib','data','owner','display','5'),
+  ('wylib','data','owner','input','ent'),
+  ('wylib','data','owner','size','4'),
+  ('wylib','data','owner','subframe','1 3'),
+  ('wylib','data','ruid','display','1'),
+  ('wylib','data','ruid','hide','1'),
+  ('wylib','data','ruid','input','ent'),
+  ('wylib','data','ruid','size','3'),
+  ('wylib','data','ruid','state','disabled'),
+  ('wylib','data','ruid','subframe','1 1'),
+  ('wylib','data_v','access','display','6'),
+  ('wylib','data_v','component','display','2'),
+  ('wylib','data_v','descr','display','4'),
+  ('wylib','data_v','name','display','3'),
+  ('wylib','data_v','own_name','display','5'),
+  ('wylib','data_v','own_name','input','ent'),
+  ('wylib','data_v','own_name','size','14'),
+  ('wylib','data_v','own_name','subframe','4 3'),
+  ('wylib','data_v','ruid','display','1'),
+  ('wyseman','contracts','comment','input','ent'),
+  ('wyseman','contracts','comment','size','30'),
+  ('wyseman','contracts','comment','subframe','4 1'),
+  ('wyseman','contracts','domain','focus','true'),
+  ('wyseman','contracts','name','input','ent'),
+  ('wyseman','contracts','name','size','30'),
+  ('wyseman','contracts','name','subframe','1 2 2'),
+  ('wyseman','contracts','released','input','ent'),
+  ('wyseman','contracts','released','size','14'),
+  ('wyseman','contracts','released','subframe','3 1'),
+  ('wyseman','contracts','version','input','ent'),
+  ('wyseman','contracts','version','size','3'),
+  ('wyseman','contracts','version','subframe','2 1');
 insert into wm.column_native (cnt_sch,cnt_tab,cnt_col,nat_sch,nat_tab,nat_col,nat_exp,pkey) values
   ('base','addr','addr_cmt','base','addr','addr_cmt','f','f'),
   ('base','addr','addr_ent','base','addr','addr_ent','f','t'),
@@ -2660,15 +3614,6 @@ insert into wm.column_native (cnt_sch,cnt_tab,cnt_col,nat_sch,nat_tab,nat_col,na
   ('wm','column_text','help','wm','column_text','help','f','f'),
   ('wm','column_text','language','wm','column_text','language','f','t'),
   ('wm','column_text','title','wm','column_text','title','f','f'),
-  ('wm','depends_v','cycle','wm','depends_v','cycle','f','f'),
-  ('wm','depends_v','depend','wm','depends_v','depend','f','f'),
-  ('wm','depends_v','depth','wm','depends_v','depth','f','f'),
-  ('wm','depends_v','fpath','wm','depends_v','fpath','f','f'),
-  ('wm','depends_v','object','wm','depends_v','object','f','f'),
-  ('wm','depends_v','od_nam','wm','depends_v','od_nam','f','f'),
-  ('wm','depends_v','od_release','wm','depends_v','od_release','f','f'),
-  ('wm','depends_v','od_typ','wm','depends_v','od_typ','f','f'),
-  ('wm','depends_v','path','wm','depends_v','path','f','f'),
   ('wm','fkey_data','conname','wm','fkey_data','conname','f','t'),
   ('wm','fkey_data','key','wm','fkey_data','key','f','f'),
   ('wm','fkey_data','keys','wm','fkey_data','keys','f','f'),
@@ -2728,11 +3673,21 @@ insert into wm.column_native (cnt_sch,cnt_tab,cnt_col,nat_sch,nat_tab,nat_col,na
   ('wm','message_text','mt_sch','wm','message_text','mt_sch','f','t'),
   ('wm','message_text','mt_tab','wm','message_text','mt_tab','f','t'),
   ('wm','message_text','title','wm','message_text','title','f','f'),
+  ('wm','objdeps_v','cycle','wm','objdeps_v','cycle','f','f'),
+  ('wm','objdeps_v','depend','wm','objdeps_v','depend','f','f'),
+  ('wm','objdeps_v','depth','wm','objdeps_v','depth','f','f'),
+  ('wm','objdeps_v','fpath','wm','objdeps_v','fpath','f','f'),
+  ('wm','objdeps_v','object','wm','objdeps_v','object','f','f'),
+  ('wm','objdeps_v','od_nam','wm','objdeps_v','od_nam','f','f'),
+  ('wm','objdeps_v','od_release','wm','objdeps_v','od_release','f','f'),
+  ('wm','objdeps_v','od_typ','wm','objdeps_v','od_typ','f','f'),
+  ('wm','objdeps_v','path','wm','objdeps_v','path','f','f'),
   ('wm','objects','checked','wm','objects','checked','f','f'),
   ('wm','objects','clean','wm','objects','clean','f','f'),
   ('wm','objects','col_data','wm','objects','col_data','f','f'),
   ('wm','objects','crt_date','wm','objects','crt_date','f','f'),
   ('wm','objects','crt_sql','wm','objects','crt_sql','f','f'),
+  ('wm','objects','delta','wm','objects','delta','f','f'),
   ('wm','objects','deps','wm','objects','deps','f','f'),
   ('wm','objects','drp_sql','wm','objects','drp_sql','f','f'),
   ('wm','objects','grants','wm','objects','grants','f','f'),
@@ -2751,6 +3706,7 @@ insert into wm.column_native (cnt_sch,cnt_tab,cnt_col,nat_sch,nat_tab,nat_col,na
   ('wm','objects_v','col_data','wm','objects','col_data','f','f'),
   ('wm','objects_v','crt_date','wm','objects','crt_date','f','f'),
   ('wm','objects_v','crt_sql','wm','objects','crt_sql','f','f'),
+  ('wm','objects_v','delta','wm','objects','delta','f','f'),
   ('wm','objects_v','deps','wm','objects','deps','f','f'),
   ('wm','objects_v','drp_sql','wm','objects','drp_sql','f','f'),
   ('wm','objects_v','grants','wm','objects','grants','f','f'),
@@ -2771,8 +3727,9 @@ insert into wm.column_native (cnt_sch,cnt_tab,cnt_col,nat_sch,nat_tab,nat_col,na
   ('wm','objects_v_depth','col_data','wm','objects','col_data','f','f'),
   ('wm','objects_v_depth','crt_date','wm','objects','crt_date','f','f'),
   ('wm','objects_v_depth','crt_sql','wm','objects','crt_sql','f','f'),
+  ('wm','objects_v_depth','delta','wm','objects','delta','f','f'),
   ('wm','objects_v_depth','deps','wm','objects','deps','f','f'),
-  ('wm','objects_v_depth','depth','wm','depends_v','depth','f','f'),
+  ('wm','objects_v_depth','depth','wm','objdeps_v','depth','f','f'),
   ('wm','objects_v_depth','drp_sql','wm','objects','drp_sql','f','f'),
   ('wm','objects_v_depth','grants','wm','objects','grants','f','f'),
   ('wm','objects_v_depth','max_rel','wm','objects','max_rel','f','f'),
@@ -2787,9 +3744,49 @@ insert into wm.column_native (cnt_sch,cnt_tab,cnt_col,nat_sch,nat_tab,nat_col,na
   ('wm','objects_v_depth','object','wm','objects_v','object','f','f'),
   ('wm','objects_v_depth','release','wm','releases','release','f','t'),
   ('wm','objects_v_depth','source','wm','objects','source','f','f'),
-  ('wm','releases','crt_date','wm','releases','crt_date','f','f'),
+  ('wm','objects_v_max','checked','wm','objects','checked','f','f'),
+  ('wm','objects_v_max','clean','wm','objects','clean','f','f'),
+  ('wm','objects_v_max','col_data','wm','objects','col_data','f','f'),
+  ('wm','objects_v_max','crt_date','wm','objects','crt_date','f','f'),
+  ('wm','objects_v_max','crt_sql','wm','objects','crt_sql','f','f'),
+  ('wm','objects_v_max','delta','wm','objects','delta','f','f'),
+  ('wm','objects_v_max','deps','wm','objects','deps','f','f'),
+  ('wm','objects_v_max','drp_sql','wm','objects','drp_sql','f','f'),
+  ('wm','objects_v_max','grants','wm','objects','grants','f','f'),
+  ('wm','objects_v_max','max_rel','wm','objects','max_rel','f','f'),
+  ('wm','objects_v_max','min_rel','wm','objects','min_rel','f','f'),
+  ('wm','objects_v_max','mod_date','wm','objects','mod_date','f','f'),
+  ('wm','objects_v_max','mod_ver','wm','objects','mod_ver','f','f'),
+  ('wm','objects_v_max','module','wm','objects','module','f','f'),
+  ('wm','objects_v_max','ndeps','wm','objects','ndeps','f','f'),
+  ('wm','objects_v_max','obj_nam','wm','objects','obj_nam','f','t'),
+  ('wm','objects_v_max','obj_typ','wm','objects','obj_typ','f','t'),
+  ('wm','objects_v_max','obj_ver','wm','objects','obj_ver','f','t'),
+  ('wm','objects_v_max','source','wm','objects','source','f','f'),
+  ('wm','objects_v_next','checked','wm','objects','checked','f','f'),
+  ('wm','objects_v_next','clean','wm','objects','clean','f','f'),
+  ('wm','objects_v_next','col_data','wm','objects','col_data','f','f'),
+  ('wm','objects_v_next','crt_date','wm','objects','crt_date','f','f'),
+  ('wm','objects_v_next','crt_sql','wm','objects','crt_sql','f','f'),
+  ('wm','objects_v_next','delta','wm','objects','delta','f','f'),
+  ('wm','objects_v_next','deps','wm','objects','deps','f','f'),
+  ('wm','objects_v_next','drp_sql','wm','objects','drp_sql','f','f'),
+  ('wm','objects_v_next','grants','wm','objects','grants','f','f'),
+  ('wm','objects_v_next','max_rel','wm','objects','max_rel','f','f'),
+  ('wm','objects_v_next','min_rel','wm','objects','min_rel','f','f'),
+  ('wm','objects_v_next','mod_date','wm','objects','mod_date','f','f'),
+  ('wm','objects_v_next','mod_ver','wm','objects','mod_ver','f','f'),
+  ('wm','objects_v_next','module','wm','objects','module','f','f'),
+  ('wm','objects_v_next','ndeps','wm','objects','ndeps','f','f'),
+  ('wm','objects_v_next','obj_nam','wm','objects','obj_nam','f','t'),
+  ('wm','objects_v_next','obj_typ','wm','objects','obj_typ','f','t'),
+  ('wm','objects_v_next','obj_ver','wm','objects','obj_ver','f','t'),
+  ('wm','objects_v_next','object','wm','objects_v','object','f','f'),
+  ('wm','objects_v_next','release','wm','releases','release','f','t'),
+  ('wm','objects_v_next','source','wm','objects','source','f','f'),
+  ('wm','releases','committed','wm','releases','committed','f','f'),
   ('wm','releases','release','wm','releases','release','f','t'),
-  ('wm','releases','sver_1','wm','releases','sver_1','f','f'),
+  ('wm','releases','sver_2','wm','releases','sver_2','f','f'),
   ('wm','role_members','level','wm','role_members','level','f','f'),
   ('wm','role_members','member','wm','role_members','member','f','t'),
   ('wm','role_members','priv','wm','role_members','priv','f','f'),
@@ -2878,7 +3875,11 @@ insert into wm.column_native (cnt_sch,cnt_tab,cnt_col,nat_sch,nat_tab,nat_col,na
   ('wylib','data_v','name','wylib','data','name','f','f'),
   ('wylib','data_v','own_name','wylib','data_v','own_name','f','f'),
   ('wylib','data_v','owner','wylib','data','owner','f','f'),
-  ('wylib','data_v','ruid','wylib','data','ruid','f','t');
+  ('wylib','data_v','ruid','wylib','data','ruid','f','t'),
+  ('wyseman','items','comment','wyseman','items','comment','f','f'),
+  ('wyseman','items','name','wyseman','items','name','f','t'),
+  ('wyseman','items','released','wyseman','items','released','f','f'),
+  ('wyseman','items','version','wyseman','items','version','f','t');
 
 --Initialization:
 insert into base.country (code,com_name,capital,cur_code,cur_name,dial_code,iso_3,iana) values
@@ -3621,3 +4622,15 @@ insert into base.parm (module, parm, type, v_int, v_text) values
 
 on conflict do nothing;
 select base.priv_grants();
+insert into wyseman.items (name, version, released, comment) values 
+  ('couch',  1, '2000-Jan-01', 'Nice couch'),
+  ('fridge', 1, '2001-Feb-02', ''),
+  ('lamp',   1, '2003-Mar-03', 'No comment'),
+  ('chair',  1, '2004-Apr-04', ''),
+  ('chair',  2, '2005-May-05', 'Improved'),
+  ('chair',  3, '2006-Jun-06', 'Much better'),
+  ('chair',  4, '2007-Jul-07', 'Awesome!')
+ 
+  on conflict on constraint items_pkey do update
+    set released = EXCLUDED.released
+;
