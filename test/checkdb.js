@@ -2,16 +2,19 @@
 //TODO:
 //- 
 
+const Path = require('path')
 const assert = require("assert");
-const { TestDB, DBAdmin } = require('./settings')
+const { TestDB, DBAdmin, SchemaDir } = require('./settings')
 const Log = require(require.resolve('wyclif/lib/log.js'))
 const DbClient = require("../lib/dbclient.js")
+const JsonSchema = Path.join(SchemaDir, 'schema.json')
 var log = Log('test-checkdb')
 var fs = require('fs')
 const dbConfig = {
   database: TestDB,
   user: DBAdmin,
   connect: true,
+  schema: JsonSchema
 }
 
 describe("Build DB and check it", function() {
