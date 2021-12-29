@@ -49,7 +49,7 @@ $$;
 -- The latest committed release, if there is one
 -- ----------------------------------------------------------------------------
 create or replace function wm.last() returns int stable language sql as $$
-  select nullif(wm.next()-1, 1);
+  select nullif(wm.next()-1, 0);
 $$;
 
 -- Untrusted language, and function to use it to create a working folder for backup/restore
@@ -146,36 +146,6 @@ create or replace function wm.releases_tf() returns trigger language plpgsql as 
 $$;
 create trigger releases_tr before update or delete on wm.releases for each row execute procedure wm.releases_tf();
 
--- How many historical objects currently loaded
--- ----------------------------------------------------------------------------
--- create or replace function wm.hist() returns bigint stable language sql as $$
---  select count(*) from wm.objects where obj_ver > 0 and max_rel < wm.next(); $$;
-
--- Commit current state to be an official release
--- ----------------------------------------------------------------------------
-create or replace function wm.commit(doit boolean = false) returns jsonb language plpgsql as $$
-  declare
-    nxt int = wm.next();
-  begin
-    if doit then
-      update wm.releases set committed = current_timestamp where release = nxt;
-      insert into wm.releases (release) values (nxt + 1);
-      update wm.objects set max_rel = nxt + 1 where max_rel = nxt;
-      nxt = nxt + 1;	-- used below
-    end if;
-    
-    return to_jsonb(s) from (select null as module,
-      (select jsonb_agg(coalesce(to_jsonb(r.committed::text), '0'::jsonb)) as releases
-        from (select * from wm.releases order by 1) r),
-      (select to_jsonb(coalesce(array_agg(o), '{}')) as history from
-        (select obj_typ,obj_nam,obj_ver,module,deps,grants,col_data,delta,
-            encode(crt_sql::bytea,'base64') as create, 
-            encode(drp_sql::bytea,'base64') as drop
-          from wm.objects_v where max_rel < nxt order by 1,2) o)) as s;
-  end;
-$$;
---revoke all on function wm.commit from public;
-
 -- Store a grant in a draft record in the object table
 -- ----------------------------------------------------------------------------
 create or replace function wm.grant(
@@ -240,6 +210,21 @@ create or replace view wm.objects_v_next as
     select * from wm.objects_v where release = wm.next();
 --revoke all on table wm.objects_v_next from public;
   
+-- Return JSON history object
+-- ----------------------------------------------------------------------------
+create or replace function wm.hist(rel int = wm.next()) returns jsonb language sql as $$
+  select to_jsonb(s) from (
+    select rel as release, null as module,
+    (select jsonb_agg(coalesce(to_jsonb(r.committed::text), '0'::jsonb)) as releases
+      from (select * from wm.releases where release <= rel order by 1) r),
+    (select to_jsonb(coalesce(array_agg(o), '{}')) as past from
+      (select obj_typ,obj_nam,obj_ver,module,deps,grants,col_data,delta,
+          encode(quote_literal(crt_sql)::bytea,'base64') as create, 
+          encode(quote_literal(drp_sql)::bytea,'base64') as drop
+        from wm.objects_v where max_rel < rel order by 1,2) o)
+  ) as s;
+$$;
+
 -- Updatable view of objects with the largest version number
 -- ----------------------------------------------------------------------------
 create or replace view wm.objects_v_max as

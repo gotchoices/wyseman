@@ -314,7 +314,7 @@ To summarize the handling of these Wyseman-maintained files:
 
 Wyseman.hist: (one per schema module)
   - Every Wyseman run:
-    - Starting template made (if absent) for each schema module
+    - Starting template file made (if absent) for each schema module
     - Compare with DB; Load history/releases if necessary to match file
     - After history and releases accurate, can then parse regular objects
   - If any objects were instantiated/modified in a make:
@@ -398,7 +398,7 @@ Wyseman.hist contains a single JSON object structured as follows:
     0				//Working beta (pre-release) number
     ...
   ],
-  history: [		/All objects from past releases
+  past: [		/All objects from past releases
     obj1:	{Object record as above},
     obj2:	{Object record as above},
     ...

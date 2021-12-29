@@ -1,6 +1,15 @@
 Wyseman TODO
 X- Get old regression tests working again
 - 
+X- When I create schema, does it do the last stable or next beta?
+X- Create last committed, by default (or override)
+X- Create versioned schema files as we go through the testing
+- 
+- Test orphan.js:
+- Loader loads release table, then objects
+- Objects' max_rel end up at correct number
+- 
+- Can delete DB and build again from schema files with history getting properly created in DB
 - Can remove "source" field from wm.objects now?
 -   How to prune removed objects (maybe just manually?)
 - Can remove "mod_ver" field from wm.objects

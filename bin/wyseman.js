@@ -29,6 +29,7 @@ var opts = require('yargs')
   .alias('b', 'branch')	.default('branch',	'',		'Include the specified object and all others that depend on it')
   .alias('S', 'schema')	.default('schema',	null,		'Create a schema file with the specified filename')
   .alias('g', 'migrate').default('migrate',	null,		'Enter a schema migration command')
+  .alias('R', 'release').default('release',	'last',		'Specify the release number of the schema file to generate')
   .alias('C', 'commit')	.boolean('commit').default('commit',	false,	'Commit official schema release in the default directory')
   .alias('r', 'replace').boolean('replace').default('replace',	false,	'Replace views/functions where possible')
   .alias('m', 'make')	.boolean('make').default('make',	true,	'Build any uninstantiated objects in the database')
@@ -107,7 +108,7 @@ dbc.connect(() => {
 //console.log("s:", opts.s, !!opts.s, opts.s == true)
   var output = process.stdout
   if (opts.sql || opts.schema) {			//Got some form of -s switch
-    let schema = new Schema({db, init: initSql})
+    let schema = new Schema({db, init: initSql, release:opts.release})
 
     if (opts.sql) {					//Show debug output
       output.write(schema.sql())

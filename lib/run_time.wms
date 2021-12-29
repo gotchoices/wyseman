@@ -542,3 +542,17 @@ view wm.column_ambig {wm.view_column_usage wm.column_native} {select
     group by		1,2,3,4
     having		count(*) > 1;
 } -primary {sch tab col}
+    
+# Commit current state to be an official release
+#-------------------------------------------
+function {wm.commit()} {} {returns jsonb language plpgsql as $$
+  declare
+    nxt int = wm.next();
+  begin
+    update wm.releases set committed = current_timestamp where release = nxt;
+    insert into wm.releases (release) values (nxt + 1);
+    update wm.objects set max_rel = nxt + 1 where max_rel = nxt;
+    nxt = nxt + 1;	-- used below
+    return wm.hist(nxt);
+  end;
+$$;}

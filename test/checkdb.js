@@ -1,15 +1,10 @@
-//Build test database and check it
-//TODO:
-//- 
-
+//Check basic database data dictionary
+//Copyright WyattERP.org; See license in root of this package
+// -----------------------------------------------------------------------------
 const Path = require('path')
 const assert = require("assert");
-const { TestDB, DBAdmin, SchemaDir } = require('./settings')
-const Log = require(require.resolve('wyclif/lib/log.js'))
-const DbClient = require("../lib/dbclient.js")
-const JsonSchema = Path.join(SchemaDir, 'schema.json')
+const { TestDB, DBAdmin, SchemaDir, DbClient, Log, JsonSchema} = require('./settings')
 var log = Log('test-checkdb')
-var fs = require('fs')
 const dbConfig = {
   database: TestDB,
   user: DBAdmin,

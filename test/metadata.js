@@ -1,21 +1,11 @@
 //Check table styles in data dictionary
-//TODO:
-//- 
-
-const Path = require('path')
+//Copyright WyattERP.org; See license in root of this package
+// -----------------------------------------------------------------------------
 const assert = require("assert");
-const { TestDB, DBAdmin, SchemaDir } = require('./settings')
-const Log = require(require.resolve('wyclif/lib/log.js'))
+const Path = require('path')
+const { TestDB, DBAdmin, Log, DbClient, SchemaDir, JsonSchema } = require('./settings')
+const dbConfig = {database: TestDB, user: DBAdmin, connect: true,}
 var log = Log('test-metadata')
-var fs = require('fs')
-var DbClient = require("../lib/dbclient.js")
-const JsonSchema = Path.join(SchemaDir, 'schema.json')
-
-const dbConfig = {
-  database: TestDB,
-  user: DBAdmin,
-  connect: true,
-}
 
 describe("Check JSON structures in data dictionary", function() {
   var db

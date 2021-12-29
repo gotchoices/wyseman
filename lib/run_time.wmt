@@ -4,8 +4,8 @@
 
 tabtext wm.releases	{Releases}	{Tracks the version number of each public release of the database design} {
     {release		{Release}	{The integer number of the release, starting with 1.  The current number in this field always designates a work-in-progress.  The number prior indicates the last public release.}}
-    {crt_date		{Created}	{When this record was created.  Indicates when development started on this release (And the prior release was frozen).}}
-    {sver_1		{BS Version}	{Dummy column with a name indicating the version of these bootstrap tables (which can't be managed by wyseman themselves).}}
+    {committed		{Committed}	{When this release version was frozen as an official release.}}
+    {sver_2		{BS Version}	{Dummy column with a name indicating the version of these bootstrap tables (which can't be managed by wyseman themselves).}}
 }
 
 tabtext wm.objects	{Objects}	{Keeps data on database tables, views, functions, etc. telling how to build or drop each object and how it relates to other objects in the database.} {
@@ -21,6 +21,7 @@ tabtext wm.objects	{Objects}	{Keeps data on database tables, views, functions, e
     {ndeps		{Normal Deps}	{An expanded and normalized array of dependencies, guaranteed to exist in another record of the table}}
     {grants		{Grants}	{The permission grants found, applicable to this object}}
     {col_data		{Display}	{Switches found, expressing preferred display characteristics for columns, assuming this is a view or table object}}
+    {delta		{Deltas}	{JSON list of table alternation commands used when migrating from one table version to the next}}
     {crt_sql		{Create}	{The SQL code to build this object}}
     {drp_sql		{Drop}		{The SQL code to drop this object}}
     {min_rel		{Minimum}	{The oldest release this version of this object belongs to}}
@@ -38,7 +39,7 @@ tabtext wm.objects_v_depth {Dep Objects}	{An enhanced view of the object table, 
     {depth		{Max Depth}	{The maximum depth of this object along any path in the dependency tree}}
 } -inherits wm.objects
 
-tabtext wm.depends_v	{Dependencies}	{A recursive view showing which database objects depend on (must be created after) other database objects.} {
+tabtext wm.objdeps_v	{Dependencies}	{A recursive view showing which database objects depend on (must be created after) other database objects.} {
     {object		{Object}	{Full object type and name (type:name)}}
     {od_typ		{Type}		{Function, view, table, etc}}
     {od_nam		{Name}		{Schema and name of object as known within that schema}}
