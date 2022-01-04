@@ -62,6 +62,8 @@ dbc.connect(() => {
     , hist = new History(db, SchemaDir, config.module)	//Manages past schema ojects
     , mig = new Migrate(db, SchemaDir)			//Migration handler
     , parse = new Parser(db)				//Schema parser
+    , output = process.stdout
+    , schema, modified
 
   if (opts.list) {
     let deplist = db.x("select depth,object,deps from wm.objects_v_depth order by depth,deps")
@@ -90,11 +92,8 @@ dbc.connect(() => {
 
     let branchVal = (opts.branch == '') ? null : "'{" + opts.branch.trim().split(' ').join(',') + "}'"
       , res = db.one(`select wm.make(${branchVal},${opts.drop},true);`)	//Make specified objects
-      , modified = res.make
+    modified = res.make
 //console.log("make:", res)
-    if (modified || opts.commit) hist.process(opts.commit)
-    if (opts.commit) mig.clear()
-
     if (parseInt(modified) > 0) {
       db.x("select wm.init_dictionary();")	//Re-initialize dictionary
     }
@@ -104,20 +103,22 @@ dbc.connect(() => {
     console.error("Running Initialization SQL")
     db.x(initSql)
   }
+
+  if (opts.commit || opts.sql || opts.schema)	//If we will need a schema object
+    schema = new Schema({db, init: initSql, release:opts.release})
+  
+  if (modified || opts.commit)
+    hist.promote(opts.commit ? schema : null)
+  if (opts.commit) mig.clear()
   
 //console.log("s:", opts.s, !!opts.s, opts.s == true)
-  var output = process.stdout
-  if (opts.sql || opts.schema) {			//Got some form of -s switch
-    let schema = new Schema({db, init: initSql, release:opts.release})
+  if (opts.sql) {				//Show debug output
+    output.write(schema.sql())
 
-    if (opts.sql) {					//Show debug output
-      output.write(schema.sql())
-
-    } else if (opts.schema) {  				//Output file specified
-      if (opts.schema != '-')
-        output = Fs.createWriteStream(Path.normalize(opts.schema))
-      output.write(JSON.stringify(schema.get(), null, 1))
-    }
+  } else if (opts.schema) {	  		//Output file specified
+    if (opts.schema != '-')
+      output = Fs.createWriteStream(Path.normalize(opts.schema))
+    output.write(JSON.stringify(schema.get(), null, 1))
   }
   output.on('finish', () => {
     dbc.disconnect()				//Disconnect async connection

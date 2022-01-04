@@ -35,11 +35,11 @@ log.debug("Schema objects:", row.count)
   it('have valid Wyseman.hist file', function() {
     let content = Fs.readFileSync(Path.join(SchemaDir, 'Wyseman.hist')).toString()
       , hist = JSON.parse(content)
-log.debug("History object:", hist.releases, hist.past)
+log.debug("History object:", hist.releases, hist.prev)
     assert.equal(typeof hist, 'object')
     assert.equal(hist.module, 'wyseman')
     assert.equal(hist.releases.length, 1)
-    assert.equal(hist.past.length, 0)
+    assert.equal(hist.prev.length, 0)
   })
 
   it('no migrations in Wyseman.delta file', function(done) {
@@ -55,7 +55,7 @@ log.debug("History object:", hist.releases, hist.past)
   })
 
   it('can commit release 1', function(done) {
-    Child.exec("wyseman -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman init test.wmi -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
   it('can build a JSON official release schema file', function(done) {
@@ -63,11 +63,11 @@ log.debug("History object:", hist.releases, hist.past)
     Child.exec("wyseman -R 1 -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
       let content = Fs.readFileSync(sFile).toString()
         , sch = JSON.parse(content)
-log.debug("Schema:", sch.past.length)
+log.debug("Schema:", sch.prev.length)
       assert.ok(sch.publish)
       assert.equal(sch.release, 1)
       assert.equal(sch.releases.length, 1)
-      assert.equal(sch.past.length, 0)		//no historical objects yet
+      assert.equal(sch.prev.length, 0)		//no historical objects yet
       done()
     })
   })
@@ -101,7 +101,7 @@ log.debug("Delta object:", darr)
   })
 
   it('can commit release 2', function(done) {
-    Child.exec("wyseman -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman init test1.wmi -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
   it('can build release 2 schema file', function(done) {
@@ -109,11 +109,11 @@ log.debug("Delta object:", darr)
     Child.exec("wyseman -R 2 -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
       let content = Fs.readFileSync(sFile).toString()
         , sch = JSON.parse(content)
-log.debug("Schema:", sch.past.length)
+log.debug("Schema:", sch.prev.length)
       assert.ok(sch.publish)
       assert.equal(sch.release, 2)
       assert.equal(sch.releases.length, 2)
-      assert.equal(sch.past.length, 1)		//one historical objects yet
+      assert.equal(sch.prev.length, 1)		//one historical objects yet
       done()
     })
   })
@@ -128,7 +128,7 @@ log.debug("Schema:", sch.past.length)
   })
 
   it('can commit release 3', function(done) {
-    Child.exec("wyseman -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman init test2.wmi -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
   
   it('can build release 3 schema file', function(done) {
@@ -136,11 +136,11 @@ log.debug("Schema:", sch.past.length)
     Child.exec("wyseman -R 3 -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
       let content = Fs.readFileSync(sFile).toString()
         , sch = JSON.parse(content)
-log.debug("Schema:", sch.past.length)
+log.debug("Schema:", sch.prev.length)
       assert.ok(sch.publish)
       assert.equal(sch.release, 3)
       assert.equal(sch.releases.length, 3)
-      assert.equal(sch.past.length, 2)		//one historical objects yet
+      assert.equal(sch.prev.length, 2)		//one historical objects yet
       done()
     })
   })
@@ -156,7 +156,7 @@ log.debug("Schema:", sch.past.length)
   })
 
   it('can commit release 4', function(done) {
-    Child.exec("wyseman -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman init test2.wmi -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
   it('can build release 4 schema file', function(done) {
@@ -164,11 +164,11 @@ log.debug("Schema:", sch.past.length)
     Child.exec("wyseman -R 4 -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
       let content = Fs.readFileSync(sFile).toString()
         , sch = JSON.parse(content)
-log.debug("Schema:", sch.past.length)
+log.debug("Schema:", sch.prev.length)
       assert.ok(sch.publish)
       assert.equal(sch.release, 4)
       assert.equal(sch.releases.length, 4)
-      assert.equal(sch.past.length, 3)		//one historical objects yet
+      assert.equal(sch.prev.length, 3)		//one historical objects yet
       done()
     })
   })
@@ -193,12 +193,12 @@ log.debug("delta:", row.delta, typeof row.delta)
 //    Fs.rmSync(Path.join(SchemaDir, 'Wyseman.delta'))
 //    Fs.rmSync(Path.join(SchemaDir, 'Wyseman.hist'))
 //  })
-/*
+
   after('Delete sample database', function(done) {
     Child.exec(`dropdb -U ${DBAdmin} ${TestDB}`, (err, so) => {
       if (err) done(err)
       done()
     })
   })
-*/
-});
+
+})

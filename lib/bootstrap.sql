@@ -2,6 +2,7 @@
 -- Copyright WyattERP.org; See license in root of this package
 -- ----------------------------------------------------------------------------
 -- TODO:
+-- - Remove _bup trigger
 -- - Make orphan check run on the basis of a module (rather than a source file)
 -- - Remove references to source file
 -- - Generate our own 'dirty' status on new migration commands
@@ -72,7 +73,6 @@ create table wm.objects (
   , checked	boolean		default false		-- checked for merge, dependencies
   , clean	boolean		default false		-- instantiated in current database
   , module	text		not null		-- name of the schema group this object belongs to
-  , mod_ver	int					-- version of the schema group this object belongs to
   , source	text		not null		-- name of the source file this object defined in
   , deps	text[]		not null		-- List of dependencies, as user entered them
   , ndeps	text[]					-- List of normalized dependencies
@@ -212,15 +212,13 @@ create or replace view wm.objects_v_next as
   
 -- Return JSON history object
 -- ----------------------------------------------------------------------------
-create or replace function wm.hist(rel int = wm.next()) returns jsonb language sql as $$
-  select to_jsonb(s) from (
+create or replace function wm.hist(rel int = wm.next()) returns json language sql as $$
+  select to_json(s) from (
     select rel as release, null as module,
-    (select jsonb_agg(coalesce(to_jsonb(r.committed::text), '0'::jsonb)) as releases
+    (select json_agg(coalesce(to_json(r.committed::text), '0'::json)) as releases
       from (select * from wm.releases where release <= rel order by 1) r),
-    (select to_jsonb(coalesce(array_agg(o), '{}')) as past from
-      (select obj_typ,obj_nam,obj_ver,module,deps,grants,col_data,delta,
-          encode(quote_literal(crt_sql)::bytea,'base64') as create, 
-          encode(quote_literal(drp_sql)::bytea,'base64') as drop
+    (select to_json(coalesce(array_agg(o), '{}')) as prev from
+      (select obj_typ,obj_nam,obj_ver,module,source,min_rel,max_rel,deps,grants,col_data,delta,crt_sql,drp_sql
         from wm.objects_v where max_rel < rel order by 1,2) o)
   ) as s;
 $$;
@@ -259,7 +257,8 @@ raise notice 'Orphan: %:%', drec.obj_typ, drec.obj_nam;
       select * into prec from wm.objects_v_next where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam and obj_ver > 0;	-- Get the latest non-draft record
       if not found then
 raise notice 'Adding: %:%', drec.obj_typ, drec.obj_nam;
-        update wm.objects set obj_ver = wm.next(), mod_date = current_timestamp where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam and obj_ver = 0;
+        update wm.objects set obj_ver = coalesce((select obj_ver from wm.objects_v_max where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam), 0) + 1,
+          mod_date = current_timestamp where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam and obj_ver = 0;
         continue;
       end if;
 
@@ -272,7 +271,7 @@ raise notice 'Adding: %:%', drec.obj_typ, drec.obj_nam;
        
         if prec.min_rel >= wm.next() then		-- if prior record starts with the current working release, then update it with our new changes
 raise notice 'Modify: %:%', drec.obj_typ, drec.obj_nam;
-          update wm.objects set checked = false, clean = false, module = drec.module, mod_ver = drec.mod_ver, source = drec.source, deps = drec.deps, grants = drec.grants, col_data = drec.col_data, crt_sql = drec.crt_sql, drp_sql = drec.drp_sql, mod_date = current_timestamp where obj_typ = prec.obj_typ and obj_nam = prec.obj_nam and obj_ver = prec.obj_ver;
+          update wm.objects set checked = false, clean = false, module = drec.module, source = drec.source, deps = drec.deps, grants = drec.grants, col_data = drec.col_data, crt_sql = drec.crt_sql, drp_sql = drec.drp_sql, mod_date = current_timestamp where obj_typ = prec.obj_typ and obj_nam = prec.obj_nam and obj_ver = prec.obj_ver;
           delete from wm.objects where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam and obj_ver = 0;
         else						-- else, prior record belongs to earlier, committed releases, so create a new, modified record
 raise notice 'Increm: %:%', drec.obj_typ, drec.obj_nam;

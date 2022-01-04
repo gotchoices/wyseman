@@ -17,7 +17,7 @@ const Fs = require('fs')
 const Path = require('path')
 const Child = require('child_process')
 const { TestDB, DBAdmin, Log, DbClient, SchemaDir, SchemaFile } = require('./settings')
-const dbConfig = {database: TestDB, user: DBAdmin, connect: true, schema: SchemaFile('1b')}
+const dbConfig = {database: TestDB, user: DBAdmin, connect: true, schema: SchemaFile('4')}
 var log = Log('test-orphan')
 
 describe("Modify DB schema", function() {
@@ -30,14 +30,21 @@ describe("Modify DB schema", function() {
     })
   })
 
-  it('have valid Wyseman.hist file', function() {
+  it('check Wyseman.hist release and archive info', function() {
     let content = Fs.readFileSync(Path.join(SchemaDir, 'Wyseman.hist')).toString()
       , hist = JSON.parse(content)
-log.debug("History object:", hist.releases, hist.history)
-    assert.equal(typeof hist, 'object')
-    assert.equal(hist.module, 'wyseman')
-    assert.equal(hist.releases.length, 5)	//5 releases
-    assert.equal(hist.history.length, 3)	//3 historical objects
+log.debug("History object:", hist.releases, hist.prev)
+    assert.equal(hist.releases.length, 5)
+    assert.equal(hist.prev.length, 3)
+    assert.equal(hist.arch.length, 4)
+//log.debug("  arch:", hist.arch[0])
+    assert.ok(hist.arch[0].boot.slice(0,3) == 'eJz')
+    assert.ok(hist.arch[0].init.slice(0,3) == 'eJy')
+    assert.ok(hist.arch[0].dict.slice(0,3) == 'eJy')
+    assert.ok(hist.arch[1].boot == null)		//Eliminates redundant archival info
+    assert.ok(hist.arch[2].boot == null)
+    assert.ok(hist.arch[3].boot == null)
+    assert.ok(hist.arch[3].init == null)
   })
 
   it('no migrations in Wyseman.delta file', function(done) {
@@ -52,7 +59,6 @@ log.debug("History object:", hist.releases, hist.history)
     })
   })
 /*
-
   it('can commit release 1', function(done) {
     Child.exec("wyseman -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })

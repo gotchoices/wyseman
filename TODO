@@ -1,22 +1,20 @@
 Wyseman TODO
-X- Get old regression tests working again
-- 
-X- When I create schema, does it do the last stable or next beta?
-X- Create last committed, by default (or override)
-X- Create versioned schema files as we go through the testing
-- 
-- Test orphan.js:
-- Loader loads release table, then objects
-- Objects' max_rel end up at correct number
-- 
-- Can delete DB and build again from schema files with history getting properly created in DB
+X- Test orphan.js:
+X- Objects' max_rel end up at correct number
+X- Loader loads release table, then objects
+X- Can delete DB and build again from schema files with history getting properly created in DB
+X- Can remove "mod_ver" field from wm.objects
+-  On first run, wyseman creates working release if it doesn't already exist
+-   
 - Can remove "source" field from wm.objects now?
 -   How to prune removed objects (maybe just manually?)
-- Can remove "mod_ver" field from wm.objects
 -   
+- Schema pulls archival info from committed release history if it exists
+- Schema files get built with valid initialization info every time
+- Can reproduce/instantiate schema for any specified release
+- 
 - Schema file pulls actual release number and date from history/db
 - Also store bootstrap, dictionary, init for each release in history file
-- Can reproduce/instantiate schema for any specified release
 -   
 - Can test/re-test complete migration from one release to the next
 -   Include module for an application to test its own migrations

@@ -7,7 +7,7 @@ var schemaFile = function(release, extension = '.json') {
   return Path.join(SchemaDir, 'schema-' + release + extension)
 }
 
-module.exports={
+module.exports = {
   TestDB: "wysemanTestDB",
   DBAdmin: "admin",
   SchemaDir: SchemaDir,
