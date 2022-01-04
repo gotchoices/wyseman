@@ -1,10 +1,10 @@
 #Schema for testing wyseman
 #Copyright WyattERP.org; See license in root of this package
 #----------------------------------------------------------------
-module wyseman
-schema wyseman {}
+module wmtest
+schema wmtest {}
 
-table wyseman.items {wyseman} {
+table wmtest.items {wmtest} {
     name	text
   , version	int
   , thoughts	text default 'none'

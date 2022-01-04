@@ -37,7 +37,7 @@ log.debug("Schema objects:", row.count)
       , hist = JSON.parse(content)
 log.debug("History object:", hist.releases, hist.prev)
     assert.equal(typeof hist, 'object')
-    assert.equal(hist.module, 'wyseman')
+    assert.equal(hist.module, 'wmtest')
     assert.equal(hist.releases.length, 1)
     assert.equal(hist.prev.length, 0)
   })
@@ -82,14 +82,14 @@ log.debug("Schema:", sch.prev.length)
   })
 
   it('enter delta rename command', function(done) {
-    let delta = '"wyseman.items rename comment descr"'
+    let delta = '"wmtest.items rename comment descr"'
     Child.exec("wyseman -g " + delta, {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
   it('have valid Wyseman.delta file now', function() {
     let content = Fs.readFileSync(Path.join(SchemaDir, 'Wyseman.delta')).toString()
       , deltas = JSON.parse(content)
-      , darr = deltas['wyseman.items']
+      , darr = deltas['wmtest.items']
 log.debug("Delta object:", darr)
     assert.equal(typeof darr, 'object')
     assert.equal(darr.length, 1)
@@ -119,7 +119,7 @@ log.debug("Schema:", sch.prev.length)
   })
 
   it('enter delta drop command', function(done) {
-    let delta = '"wyseman.items drop descr"'
+    let delta = '"wmtest.items drop descr"'
     Child.exec("wyseman -g " + delta, {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
@@ -174,7 +174,7 @@ log.debug("Schema:", sch.prev.length)
   })
 
   it('correct delta and next release value', function(done) {
-    let sql = "select delta, wm.next() from wm.objects_v where obj_nam = 'wyseman.items' and release = 4"
+    let sql = "select delta, wm.next() from wm.objects_v where obj_nam = 'wmtest.items' and release = 4"
     db.query("select wm.next()", null, (e, res) => {if (e) done(e)
       assert.equal(res.rows.length, 1)
       let row = res.rows[0]
@@ -188,11 +188,6 @@ log.debug("delta:", row.delta, typeof row.delta)
   after('Disconnect from test database', function() {
     db.disconnect()
   })
-
-//  after('Delete history, delta files', function() {
-//    Fs.rmSync(Path.join(SchemaDir, 'Wyseman.delta'))
-//    Fs.rmSync(Path.join(SchemaDir, 'Wyseman.hist'))
-//  })
 
   after('Delete sample database', function(done) {
     Child.exec(`dropdb -U ${DBAdmin} ${TestDB}`, (err, so) => {

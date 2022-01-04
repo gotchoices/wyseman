@@ -105,7 +105,7 @@ dbc.connect(() => {
   }
 
   if (opts.commit || opts.sql || opts.schema)	//If we will need a schema object
-    schema = new Schema({db, init: initSql, release:opts.release})
+    schema = new Schema({db, init: initSql, release:opts.release, history:hist})
   
   if (modified || opts.commit)
     hist.promote(opts.commit ? schema : null)

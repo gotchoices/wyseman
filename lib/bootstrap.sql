@@ -2,10 +2,6 @@
 -- Copyright WyattERP.org; See license in root of this package
 -- ----------------------------------------------------------------------------
 -- TODO:
--- - Remove _bup trigger
--- - Make orphan check run on the basis of a module (rather than a source file)
--- - Remove references to source file
--- - Generate our own 'dirty' status on new migration commands
 -- - Default wm priv should be restricted.  Can public still use data-dictionary functions?
 -- - 
 create schema if not exists wm;	-- Holds all the wyseman objects (common to development and distribution modes)
@@ -50,7 +46,7 @@ $$;
 -- The latest committed release, if there is one
 -- ----------------------------------------------------------------------------
 create or replace function wm.last() returns int stable language sql as $$
-  select nullif(wm.next()-1, 0);
+  select max(release) from wm.releases where not committed isnull;
 $$;
 
 -- Untrusted language, and function to use it to create a working folder for backup/restore
@@ -73,7 +69,6 @@ create table wm.objects (
   , checked	boolean		default false		-- checked for merge, dependencies
   , clean	boolean		default false		-- instantiated in current database
   , module	text		not null		-- name of the schema group this object belongs to
-  , source	text		not null		-- name of the source file this object defined in
   , deps	text[]		not null		-- List of dependencies, as user entered them
   , ndeps	text[]					-- List of normalized dependencies
   , grants	text[]		not null default '{}'	-- List of grants
@@ -93,45 +88,22 @@ create table wm.objects (
 -- ----------------------------------------------------------------------------
 create or replace function wm.objects_tf_bd() returns trigger language plpgsql as $$
   begin
-    if old.obj_ver <= 0 then			-- Can always delete draft entries
+    if old.obj_ver <= 0 then			-- Draft entry
       return old;
-    elsif old.min_rel < wm.next() then		-- Don't allow delete of historical objects
+    elsif old.max_rel < wm.next() then		-- Historical object
       raise 'Object %:% part of an earlier committed release', old.obj_typ, old.obj_nam;
-    elsif old.max_rel > old.min_rel then	-- Object belongs to more than one release
-      update wm.objects_v_max set max_rel = max_rel - 1 where obj_typ = old.obj_typ and obj_nam = old.obj_nam;
-      return null;
-    elsif old.clean then			-- Delete the instantiated object and its dependencies
+    end if;
+    if old.clean then				-- Delete the instantiated object and its dependencies
       perform wm.make(array[old.obj_typ || ':' || old.obj_nam], true, false);
+    end if;
+    if old.max_rel > old.min_rel then		-- Object belongs to more than one release
+      update wm.objects set max_rel = max_rel - 1 where obj_typ = old.obj_typ and obj_nam = old.obj_nam and obj_ver = old.obj_ver;
+      return null;
     end if;
     return old;
   end;
 $$;
 create trigger objects_tr_bd before delete on wm.objects for each row execute procedure wm.objects_tf_bd();
-
--- Before object update, see which delta migration commands are not done
--- ----------------------------------------------------------------------------
---create or replace function wm.objects_tf_bup() returns trigger language plpgsql as $$
---  declare
---    cmd		jsonb;
---    i		int default 0;
---  begin
---    if new.delta isnull or new.delta is not distinct from old.delta then 
---      return new; 
---    end if;
---
---    for cmd in select * from jsonb_array_elements(new.delta) loop	-- for each migration command
---      if cmd = any(select jsonb_array_elements(old.delta)) then
---        continue;							-- If not already recorded
---      end if;
---      cmd = cmd || '{"dirty":true}';					-- mark it as not yet deployed
---raise notice 'cmd:%', cmd;
---      new.delta = jsonb_set(new.delta, ('{' || i || '}')::text[], cmd);
---      i = i + 1;
---    end loop;
---    return new;
---  end;
---$$;
---create trigger objects_tr_bup before update on wm.objects for each row execute procedure wm.objects_tf_bup();
 
 -- Check that release ranges are consistent with release/next
 -- ----------------------------------------------------------------------------
@@ -212,15 +184,25 @@ create or replace view wm.objects_v_next as
   
 -- Return JSON history object
 -- ----------------------------------------------------------------------------
-create or replace function wm.hist(rel int = wm.next()) returns json language sql as $$
-  select to_json(s) from (
-    select rel as release, null as module,
-    (select json_agg(coalesce(to_json(r.committed::text), '0'::json)) as releases
-      from (select * from wm.releases where release <= rel order by 1) r),
-    (select to_json(coalesce(array_agg(o), '{}')) as prev from
-      (select obj_typ,obj_nam,obj_ver,module,source,min_rel,max_rel,deps,grants,col_data,delta,crt_sql,drp_sql
-        from wm.objects_v where max_rel < rel order by 1,2) o)
-  ) as s;
+create or replace function wm.hist(rel int = null) returns json language plpgsql as $$
+  begin
+    if rel isnull then
+      rel = wm.next();
+      if rel = wm.last() then	-- Make sure there is s development release
+        rel = rel + 1;
+        insert into wm.releases (release) values (rel);
+        update wm.objects set max_rel = rel where max_rel = rel-1;
+      end if;
+    end if;
+    return to_json(s) from (
+      select rel as release, null as module,
+      (select json_agg(coalesce(to_json(r.committed::text), '0'::json)) as releases
+        from (select * from wm.releases where release <= rel order by 1) r),
+      (select to_json(coalesce(array_agg(o), '{}')) as prev from
+        (select obj_typ,obj_nam,obj_ver,module,min_rel,max_rel,deps,grants,col_data,delta,crt_sql,drp_sql
+          from wm.objects_v where max_rel < rel order by 1,2) o)
+    ) as s;
+  end;
 $$;
 
 -- Updatable view of objects with the largest version number
@@ -239,17 +221,17 @@ create or replace function wm.check_drafts(orph boolean default false) returns b
     prec	record;		-- previous latest record
     changes	boolean default false;
   begin
-    if orph then		-- Find any orphaned objects (only works if there is at least one valid object remaining in each source file)
+    if orph then -- Find any orphaned objects (only works if there is at least one valid object remaining in each module)
       for drec in		
         select o.*
-          from	wm.objects	o
-          join	(select distinct module, source from wm.objects where obj_ver = 0) as od on od.module = o.module and od.source = o.source
-          where 	wm.next() between o.min_rel and o.max_rel
-          and	o.source != ''
-          and	not exists (select obj_nam from wm.objects where obj_typ = o.obj_typ and obj_nam = o.obj_nam and obj_ver = 0)
+          from wm.objects o
+          join (select distinct module from wm.objects where obj_ver = 0) as od on od.module = o.module
+          where wm.next() between o.min_rel and o.max_rel
+          and o.module != ''
+          and not exists (select obj_nam from wm.objects where obj_typ = o.obj_typ and obj_nam = o.obj_nam and obj_ver = 0)
           loop
-raise notice 'Orphan: %:%', drec.obj_typ, drec.obj_nam;
-            delete from wm.objects where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam and obj_ver = drec.obj_ver;
+raise notice 'Orphan: %:%:%', drec.obj_typ, drec.obj_nam, drec.obj_ver;
+          delete from wm.objects where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam and obj_ver = drec.obj_ver;
       end loop;
     end if;
 
@@ -271,7 +253,7 @@ raise notice 'Adding: %:%', drec.obj_typ, drec.obj_nam;
        
         if prec.min_rel >= wm.next() then		-- if prior record starts with the current working release, then update it with our new changes
 raise notice 'Modify: %:%', drec.obj_typ, drec.obj_nam;
-          update wm.objects set checked = false, clean = false, module = drec.module, source = drec.source, deps = drec.deps, grants = drec.grants, col_data = drec.col_data, crt_sql = drec.crt_sql, drp_sql = drec.drp_sql, mod_date = current_timestamp where obj_typ = prec.obj_typ and obj_nam = prec.obj_nam and obj_ver = prec.obj_ver;
+          update wm.objects set checked = false, clean = false, module = drec.module, deps = drec.deps, grants = drec.grants, col_data = drec.col_data, crt_sql = drec.crt_sql, drp_sql = drec.drp_sql, mod_date = current_timestamp where obj_typ = prec.obj_typ and obj_nam = prec.obj_nam and obj_ver = prec.obj_ver;
           delete from wm.objects where obj_typ = drec.obj_typ and obj_nam = drec.obj_nam and obj_ver = 0;
         else						-- else, prior record belongs to earlier, committed releases, so create a new, modified record
 raise notice 'Increm: %:%', drec.obj_typ, drec.obj_nam;
@@ -373,7 +355,7 @@ create or replace function wm.make(
   begin
     if objs is null then		-- Defaults to drop/create of all unclean objects
       objs = '{}';
-      for s in select object from wm.objects_v where not clean loop
+      for s in select object from wm.objects_v where release = wm.next() and not clean loop
         objs = objs || s;
       end loop;
     end if;
@@ -400,11 +382,11 @@ raise notice 'Drop:% :%:', trec.depth, trec.object;
         end if;
         if trec.obj_typ = 'table' and cnt > 0 then		-- Attempt to preserve existing table data
           collist = array_to_string(array(select column_name::text from information_schema.columns where table_schema || '.' || table_name = trec.obj_nam order by ordinal_position),',');
--- raise notice 'collist:%', collist;
+--raise notice 'collist:%', collist;
           s = wm.workdir(sess_id) || '/' || trec.obj_nam || '.dump';
           execute 'copy ' || trec.obj_nam || '(' || collist || ') to ''' || s || '''';
           get diagnostics cnt = ROW_COUNT;
--- raise notice 'Count:%', cnt;
+--raise notice 'Count:%', cnt;
           insert into _table_info (obj_nam,columns,fname,rows) values (trec.obj_nam, collist, s, cnt);
         end if;
 

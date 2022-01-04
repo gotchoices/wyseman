@@ -1,17 +1,6 @@
 //Check dropping objects out of a schema
 //Copyright WyattERP.org; See license in root of this package
 // -----------------------------------------------------------------------------
-// TODO:
-//- Get wyseman outputting schema release files with history attached
-//- Run-time load needs to populate wm.objects with correct release
-//- See if orphans can be detected OK without source column
-//- Eliminate source column
-//- 
-//- In run-time load:
-//- If release is not as expected, need to populate with history too
-//-   and then attempt a migration to current release
-//- 
-//- 
 const assert = require("assert");
 const Fs = require('fs')
 const Path = require('path')
@@ -38,9 +27,9 @@ log.debug("History object:", hist.releases, hist.prev)
     assert.equal(hist.prev.length, 3)
     assert.equal(hist.arch.length, 4)
 //log.debug("  arch:", hist.arch[0])
-    assert.ok(hist.arch[0].boot.slice(0,3) == 'eJz')
-    assert.ok(hist.arch[0].init.slice(0,3) == 'eJy')
-    assert.ok(hist.arch[0].dict.slice(0,3) == 'eJy')
+    assert.ok(hist.arch[0].boot.slice(0,4) == 'eJzN')
+    assert.ok(hist.arch[0].init.slice(0,4) == 'eJyV')
+    assert.ok(hist.arch[0].dict.slice(0,4) == 'eJzN')
     assert.ok(hist.arch[1].boot == null)		//Eliminates redundant archival info
     assert.ok(hist.arch[2].boot == null)
     assert.ok(hist.arch[3].boot == null)
@@ -58,82 +47,34 @@ log.debug("History object:", hist.releases, hist.prev)
       done()
     })
   })
-/*
-  it('can commit release 1', function(done) {
-    Child.exec("wyseman -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+
+  it('can disable pruning', function(done) {
+    Child.exec("wyseman objects test4.wms --no-prune", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
-  it('correct next release value', function(done) {
-    db.query("select wm.next()", null, (e, res) => {if (e) done(e)
+  it('obsolete table remains', function(done) {
+    db.query("select count(*) from wmtest.items", null, (e, res) => {if (e) done(e)
       assert.equal(res.rows.length, 1)
       let row = res.rows[0]
-      assert.equal(row.next, 2)
+log.debug("Items count:", row)
+      assert.equal(row.count, 7)
       done()
     })
   })
 
-  it('enter delta rename command', function(done) {
-    let delta = '"wyseman.items rename comment descr"'
-    Child.exec("wyseman -g " + delta, {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+  it('can prune obsolete object', function(done) {
+    Child.exec("wyseman objects test4.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
-  it('have valid Wyseman.delta file now', function() {
-    let content = Fs.readFileSync(Path.join(SchemaDir, 'Wyseman.delta')).toString()
-      , deltas = JSON.parse(content)
-      , darr = deltas['wyseman.items']
-log.debug("Delta object:", darr)
-    assert.equal(typeof darr, 'object')
-    assert.equal(darr.length, 1)
-    assert.equal(darr[0].oper, 'rename')
-  })
-
-  it('build items table with new column name', function(done) {
-    Child.exec("wyseman objects test1.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
-  })
-
-  it('can commit release 2', function(done) {
-    Child.exec("wyseman -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
-  })
-
-  it('enter delta drop command', function(done) {
-    let delta = '"wyseman.items drop descr"'
-    Child.exec("wyseman -g " + delta, {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
-  })
-
-  it('build items table after dropped column', function(done) {
-    Child.exec("wyseman objects test2.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
-  })
-
-  it('can commit release 3', function(done) {
-    Child.exec("wyseman -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
-  })
-
-  it('have empty Wyseman.delta file now', function() {
-    let content = Fs.readFileSync(Path.join(SchemaDir, 'Wyseman.delta')).toString()
-      , deltas = JSON.parse(content)
-    assert.equal(Object.keys(deltas), 0)
-  })
-
-  it('build items table after added column w/ no delta', function(done) {
-    Child.exec("wyseman objects test3.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
-  })
-
-  it('can commit release 4', function(done) {
-    Child.exec("wyseman -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
-  })
-
-  it('correct delta and next release value', function(done) {
-    let sql = "select delta, wm.next() from wm.objects_v where obj_nam = 'wyseman.items' and release = 4"
-    db.query("select wm.next()", null, (e, res) => {if (e) done(e)
-      assert.equal(res.rows.length, 1)
-      let row = res.rows[0]
-      assert.equal(row.next, 5)
-log.debug("delta:", row.delta, typeof row.delta)
-      assert.ok(!row.delta)
+  it('obsolete table gone', function(done) {
+    db.query("select count(*) from wmtest.items", null, (e, res) => {
+      assert.ok(e != null)
+      assert.equal(e.name, 'error')
+      assert.equal(e.code, '42P01')
       done()
     })
   })
-*/
+
   after('Disconnect from test database', function() {
     db.disconnect()
   })

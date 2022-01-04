@@ -74,7 +74,7 @@ class Session
           else
             deparr = %Q{{"#{@db.esc(deps.split(' ').join('","'))}"}}
           end
-          sql = %Q{insert into wm.objects (obj_typ, obj_nam, deps, module, source, crt_sql, drp_sql) values ('#{obj}', '#{@db.esc(name)}', '#{@db.esc(deparr)}', '#{@db.esc(mod)}', '#{@db.esc(@fname)}', '#{@db.esc(create)}', '#{@db.esc(drop)}');}
+          sql = %Q{insert into wm.objects (obj_typ, obj_nam, deps, module, crt_sql, drp_sql) values ('#{obj}', '#{@db.esc(name)}', '#{@db.esc(deparr)}', '#{@db.esc(mod)}', '#{@db.esc(create)}', '#{@db.esc(drop)}');}
 
         when 'priv'
           name, obj, lev, group, give = args

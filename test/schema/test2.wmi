@@ -4,7 +4,7 @@
 
 #Default item values
 cat <<EOF
-insert into wyseman.items (name, version, released) values 
+insert into wmtest.items (name, version, released) values 
   ('couch',  1, '2000-Jan-01'),
   ('fridge', 1, '2001-Feb-02'),
   ('lamp',   1, '2003-Mar-03'),

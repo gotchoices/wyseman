@@ -1,6 +1,6 @@
 #Copyright WyattERP.org; See license in root of this package
 #----------------------------------------------------------------
-tabdef wyseman.contracts -focus domain -f {
+tabdef wmtest.items -focus domain -f {
     {name		ent	30	{1 2 2}		}
     {version		ent	3	{2 1}		}
     {released		ent	14	{3 1}		}

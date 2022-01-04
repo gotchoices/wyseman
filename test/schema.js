@@ -51,7 +51,7 @@ log.debug("Tables:", res.rows)
   })
 
   it('should have 4 wyseman column text descriptions', function(done) {
-    let sql = "select * from wm.column_text where ct_sch = 'wyseman'"
+    let sql = "select * from wm.column_text where ct_sch = 'wmtest'"
     db.query(sql, null, (e, res) => {if (e) done(e)
       assert.equal(res.rows.length, 4)
       done()
@@ -63,7 +63,7 @@ log.debug("Tables:", res.rows)
   })
 
   it('should have 4 wyseman column defaults', function(done) {
-    let sql = "select * from wm.column_def where obj = 'wyseman.items'"
+    let sql = "select * from wm.column_def where obj = 'wmtest.items'"
     db.query(sql, null, (e, res) => {if (e) done(e)
       assert.equal(res.rows.length, 4)
       done()
@@ -74,8 +74,8 @@ log.debug("Tables:", res.rows)
     Child.exec("wyseman init test.wmi", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
-  it('should have 7 rows in wyseman.items', function(done) {
-    let sql = "select * from wyseman.items"
+  it('should have 7 rows in wmtest.items', function(done) {
+    let sql = "select * from wmtest.items"
     db.query(sql, null, (e, res) => {if (e) done(e)
       assert.equal(res.rows.length, 7)
       done()

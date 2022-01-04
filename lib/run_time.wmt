@@ -16,7 +16,6 @@ tabtext wm.objects	{Objects}	{Keeps data on database tables, views, functions, e
     {clean		{Clean}		{The object represented by this record is built and current according to this create script}}
     {module		{Module}	{The name of a code module (package) this object belongs to}}
     {mod_ver		{Mod Vers}	{The version of the code module, or package this object belongs to}}
-    {source		{Source}	{The basename of the external source code file this object was parsed from}}
     {deps		{Depends}	{A list of un-expanded dependencies for this object, exactly as expressed in the source file}}
     {ndeps		{Normal Deps}	{An expanded and normalized array of dependencies, guaranteed to exist in another record of the table}}
     {grants		{Grants}	{The permission grants found, applicable to this object}}
