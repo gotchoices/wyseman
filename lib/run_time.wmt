@@ -15,12 +15,12 @@ tabtext wm.objects	{Objects}	{Keeps data on database tables, views, functions, e
     {checked		{Checked}	{This record has had its dependencies and consistency checked}}
     {clean		{Clean}		{The object represented by this record is built and current according to this create script}}
     {module		{Module}	{The name of a code module (package) this object belongs to}}
-    {mod_ver		{Mod Vers}	{The version of the code module, or package this object belongs to}}
     {deps		{Depends}	{A list of un-expanded dependencies for this object, exactly as expressed in the source file}}
     {ndeps		{Normal Deps}	{An expanded and normalized array of dependencies, guaranteed to exist in another record of the table}}
     {grants		{Grants}	{The permission grants found, applicable to this object}}
     {col_data		{Display}	{Switches found, expressing preferred display characteristics for columns, assuming this is a view or table object}}
-    {delta		{Deltas}	{JSON list of table alternation commands used when migrating from one table version to the next}}
+    {delta		{Deltas}	{JSON list of table alteration commands used when migrating from one table version to the next}}
+    {del_idx		{Delta Index}	{Points to the next migration command that has not yet been deployed}}
     {crt_sql		{Create}	{The SQL code to build this object}}
     {drp_sql		{Drop}		{The SQL code to drop this object}}
     {min_rel		{Minimum}	{The oldest release this version of this object belongs to}}

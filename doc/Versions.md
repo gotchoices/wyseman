@@ -228,13 +228,38 @@ object versions contained in the database.  And we should also be able to
 populate an empty database from a valid history and delta file.
 
 -------------------------------------------------------------------------------
+Simplified Migration Syntax:
+
+The above proposal implies encoding migration commands and then reconstructing
+an SQL command based on the encoded command.  This may be more compact in
+certain ways, but it is also limited to the foresight of the design, in what
+commands are available.  And in its prototype JSON implementation, it doesn't
+end up being all that compact anyway.
+
+An alternate syntax would be to simply include SQL text fragments as follows:
+  - tablename add column w sql_spec
+  - tablename drop column x
+  - tablename rename column y to z
+  - any other full SQL command
+
+The parser would examine the first and second token.  If the first token is
+reasonably a tablename, and the second token is one of "add, drop, rename", we
+will prepend to the command "alter table" and execute it.  Otherwise, we will
+assume it to be a complete command and execute it as-is.
+
+The DB could then store an index into the array of commands to point to the
+next un-applied command, if any.  This will keep track of which commands have
+yet to be executed.  This would be a very efficient way of marking/unmarking
+the command stack for execution or re-execution.
+
+-------------------------------------------------------------------------------
 Bootstrap Schema:
 
-Finally, we will admit that a production DB will probably have to contain the 
-wm.objects table.  We need a reliable way to know which objects have been
-instantiated in the database.  And it will be much easier to bring an old 
-schema current using the build mechanism previously only a part of the 
-development environment.
+Finally, we will resign to the fact that a production DB will contain the 
+wm.objects table and its contents.  We need a reliable way to know which 
+objects have been instantiated in the database.  And it will likely be
+easier to bring an old schema current using the build mechanism previously 
+only a part of the development environment.
 
 There is probably not that compelling a reason anyway to use a trimmed-down 
 schema (lacking certain development components) in a production database.

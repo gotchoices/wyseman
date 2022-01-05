@@ -82,7 +82,7 @@ log.debug("Schema:", sch.prev.length)
   })
 
   it('enter delta rename command', function(done) {
-    let delta = '"wmtest.items rename comment descr"'
+    let delta = '"wmtest.items rename comment to descr"'
     Child.exec("wyseman -g " + delta, {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
@@ -93,7 +93,7 @@ log.debug("Schema:", sch.prev.length)
 log.debug("Delta object:", darr)
     assert.equal(typeof darr, 'object')
     assert.equal(darr.length, 1)
-    assert.equal(darr[0].oper, 'rename')
+    assert.equal(darr[0], 'rename comment to descr')
   })
 
   it('build items table with new column name', function(done) {
@@ -235,10 +235,7 @@ log.debug("Schema:", sch.prev.length)
 
   after('Delete working schema file', function() {
     Fs.rmSync(SchemaFile('1b'))
-    Fs.rmSync(SchemaFile('1'))
-    Fs.rmSync(SchemaFile('2'))
     Fs.rmSync(SchemaFile('2b'))
-    Fs.rmSync(SchemaFile('3'))
   })
 
   after('Delete sample database', function(done) {

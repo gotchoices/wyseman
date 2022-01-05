@@ -16,6 +16,9 @@ require('./metadata.js')
 after('Delete history, delta, schema files', function() {
   Fs.rmSync(Path.join(SchemaDir, 'Wyseman.delta'))
   Fs.rmSync(Path.join(SchemaDir, 'Wyseman.hist'))
+  Fs.rmSync(SchemaFile('1'))
+  Fs.rmSync(SchemaFile('2'))
+  Fs.rmSync(SchemaFile('3'))
   Fs.rmSync(SchemaFile('4'))
 })
 

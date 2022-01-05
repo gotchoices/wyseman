@@ -73,7 +73,8 @@ create table wm.objects (
   , ndeps	text[]					-- List of normalized dependencies
   , grants	text[]		not null default '{}'	-- List of grants
   , col_data	text[]		not null default '{}'	-- Extra data about columns, for views
-  , delta	jsonb					-- JSON array of migration commands
+  , delta	text[]		not null default '{}'	-- array of migration commands
+  , del_idx	int		not null default 0	-- pointer to next unapplied delta
   , crt_sql	text		not null		-- SQL to create the object
   , drp_sql	text		not null		-- SQL to drop the object
   , min_rel	int		default wm.next() references wm.releases check (min_rel <= max_rel) -- smallest release this object belongs to
@@ -378,7 +379,7 @@ raise notice 'Drop:% :%:', trec.depth, trec.object;
               raise notice 'Skipping non-existant: %:%', trec.obj_typ, trec.obj_nam;
               continue;
           end;
-          perform wm.migrate(trec.obj_nam, trec.delta);		-- Need to modify table?
+          perform wm.migrate(trec);				-- Need to modify table?
         end if;
         if trec.obj_typ = 'table' and cnt > 0 then		-- Attempt to preserve existing table data
           collist = array_to_string(array(select column_name::text from information_schema.columns where table_schema || '.' || table_name = trec.obj_nam order by ordinal_position),',');
@@ -435,41 +436,35 @@ $$;
 
 -- Process group of object migration commands
 -- ----------------------------------------------------------------------------
-create or replace function wm.migrate(objname text, migs jsonb) 
+create or replace function wm.migrate(orec record)
   returns boolean language plpgsql as $$
   declare
-    cmd		jsonb;
+    objname	text = orec.obj_nam;
+    delta	text[] = orec.delta;
+    del_idx	int = orec.del_idx;
+    cmd		text;
     sql		text;
     i		int default 0;
   begin
 
-    if migs isnull then return true; end if;
---raise notice 'Migrate: % %', objname, migs;
+    if delta isnull then return true; end if;
+raise notice 'Migrate: % %', objname, delta;
 
-    for cmd in select * from jsonb_array_elements(migs) loop		-- for each migration command
---raise notice 'Migrate: cmd:%; dirty:% %', cmd, cmd->'dirty', (cmd->'dirty')::boolean;
-      if cmd->'dirty' isnull or not (cmd->'dirty')::boolean then continue; end if;		-- only process commands not yet done
-      if cmd->>'oper' = 'drop' then
-raise notice 'Migrate: drop % column:%', objname, cmd->>'col';
-        sql = 'alter table ' || objname || ' drop column ' || (cmd->>'col') || ';';
-      elsif cmd->>'oper' = 'rename' then
-raise notice 'Migrate: rename % column:% to:%', objname, cmd->>'col', cmd->>'spec';
-        sql = 'alter table ' || objname || ' rename column ' || (cmd->>'col') || ' to ' || (cmd->>'spec') || ';';
-        null;
-      elsif cmd->>'oper' = 'update' then
-raise notice 'Migrate: update % column:% =:%', objname, cmd->>'col', cmd->>'spec';
-        sql = 'update ' || objname || ' set ' || (cmd->>'col') || ' = ' || (cmd->>'spec') || ';';
-      else
-        null;
+    foreach cmd in array delta loop		-- for each migration command
+--raise notice ' cmd:%', cmd;
+      if i >= del_idx then			-- not already processed
+        if cmd ~* '^(drop|rename|add)\s' then
+          sql = 'alter table ' || objname || ' ' || cmd || ';';
+        elsif cmd ~* '^update\s' then
+          sql = 'update ' || objname || ' set ' || cmd ';';
+        else continue;
+        end if;
       end if;
 --raise notice 'SQL: %', sql;
       execute sql;
-      cmd = cmd - 'dirty';		-- remove dirty flag
-      migs = jsonb_set(migs, ('{' || i || '}')::text[], cmd);
---raise notice 'Migs: % : %', cmd, migs;
       i = i + 1;
     end loop;
-    update wm.objects_v_max set delta = migs where obj_typ = 'table' and obj_nam = objname;
+    update wm.objects set del_idx = i where obj_typ = orec.obj_typ and obj_nam = orec.obj_nam and obj_ver = orec.obj_ver;
 --raise exception 'Stop';
     return true;
   end;
