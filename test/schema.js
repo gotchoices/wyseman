@@ -1,4 +1,4 @@
-//Build test database schema
+//Build test database schema; Run first
 //Copyright WyattERP.org; See license in root of this package
 // -----------------------------------------------------------------------------
 const assert = require("assert");
@@ -15,9 +15,19 @@ var jsonSchema = SchemaFile(release)
 describe("Build DB schema files", function() {
   var db
 
+  before('Delete old history/migration files', function(done) {
+    Fs.rm(Path.join(SchemaDir, 'Wyseman.hist'), {force:true}, () => {})
+    Fs.rm(Path.join(SchemaDir, 'Wyseman.delta'), {force:true}, done)
+  })
+
+  before('Delete sample database if it exists', function(done) {
+    Child.exec(`dropdb -U ${DBAdmin} ${TestDB}`, (err, out) => done())
+  })
+
   before('Build schema database', function(done) {
     Child.exec("wyseman", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
+
   before('Connect to schema database', function(done) {
     db = new DbClient(dbConfig, ()=>{}, ()=>{
       log.debug("Connected to DB");
@@ -35,7 +45,7 @@ log.debug("Tables:", res.rows)
   })
 
   it('should build objects', function(done) {
-    Child.exec("wyseman objects test.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman objects test1.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
   it('should have 13 wyselib tables built', function(done) {
@@ -47,7 +57,7 @@ log.debug("Tables:", res.rows)
   })
 
   it('should build text descriptions', function(done) {
-    Child.exec("wyseman text test.wmt", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman text test1.wmt", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
   it('should have 4 wyseman column text descriptions', function(done) {
@@ -59,7 +69,7 @@ log.debug("Tables:", res.rows)
   })
 
   it('should build defaults', function(done) {
-    Child.exec("wyseman defs test.wmd", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman defs test1.wmd", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
   it('should have 4 wyseman column defaults', function(done) {
@@ -71,7 +81,7 @@ log.debug("Tables:", res.rows)
   })
 
   it('should initialize data', function(done) {
-    Child.exec("wyseman init test.wmi", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman init test1.wmi", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
   it('should have 7 rows in wmtest.items', function(done) {
@@ -94,7 +104,7 @@ log.debug("Tables:", res.rows)
   })
 
   it('should build an SQL schema file', function(done) {
-    Child.exec("wyseman init test.wmi -s", {cwd: SchemaDir}, (e,o) => {if (e) done(e)
+    Child.exec("wyseman init test1.wmi -s", {cwd: SchemaDir}, (e,o) => {if (e) done(e)
       let begin = o.slice(0, 12)
 log.debug("schema:", begin)
       assert.equal(begin, '--Bootstrap:')
@@ -104,7 +114,7 @@ log.debug("schema:", begin)
   })
 
   it('should build a JSON schema file with objects', function(done) {
-    Child.exec("wyseman init test.wmi -S " + jsonSchema, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
+    Child.exec("wyseman init test1.wmi -S " + jsonSchema, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
       let content = Fs.readFileSync(jsonSchema).toString()
         , sch = JSON.parse(content)
       assert.ok(sch.publish != null)
@@ -159,10 +169,7 @@ describe("Build DB with canned SQL schema", function() {
   })
 
   after('Delete sample database', function(done) {
-    Child.exec(`dropdb -U ${DBAdmin} ${TestDB}`, (err, so) => {
-      if (err) done(err)
-      done()
-    })
+    Child.exec(`dropdb -U ${DBAdmin} ${TestDB}`, done)
   })
 
 });

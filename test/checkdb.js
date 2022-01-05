@@ -3,16 +3,11 @@
 // -----------------------------------------------------------------------------
 const Path = require('path')
 const assert = require("assert");
-const { TestDB, DBAdmin, SchemaDir, DbClient, Log, JsonSchema} = require('./settings')
+const { TestDB, DBAdmin, Log, DbClient, SchemaDir, SchemaFile } = require('./settings')
+const dbConfig = {database: TestDB, user: DBAdmin, connect: true, schema: SchemaFile('4')}
 var log = Log('test-checkdb')
-const dbConfig = {
-  database: TestDB,
-  user: DBAdmin,
-  connect: true,
-  schema: JsonSchema
-}
 
-describe("Build DB and check it", function() {
+describe("Build DB and check data dictionary", function() {
   var db
 
   before('Connect to (or create) test database', function(done) {

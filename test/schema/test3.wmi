@@ -1,0 +1,19 @@
+#!/bin/bash
+#Copyright MyCHIPs.org; See license in root of this package
+#----------------------------------------------------------------
+
+#Default item values
+cat <<EOF
+insert into wmtest.items (name, version, released) values 
+  ('couch',  1, '2000-Jan-01'),
+  ('fridge', 1, '2001-Feb-02'),
+  ('lamp',   1, '2003-Mar-03'),
+  ('chair',  1, '2004-Apr-04'),
+  ('chair',  2, '2005-May-05'),
+  ('chair',  3, '2006-Jun-06'),
+  ('chair',  4, '2007-Jul-07')
+ 
+  on conflict on constraint items_pkey do update
+    set released = EXCLUDED.released
+;
+EOF

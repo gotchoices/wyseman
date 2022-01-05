@@ -8,5 +8,6 @@ table wmtest.items {wmtest} {
     name	text
   , version	int
   , released	date
+  , descr	text
   , primary key (name, version)
 }

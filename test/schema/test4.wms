@@ -3,3 +3,11 @@
 #----------------------------------------------------------------
 module wmtest
 schema wmtest {}
+
+table wmtest.items {wmtest} {
+    name	text
+  , version	int
+  , thoughts	text default 'none'
+  , released	date
+  , primary key (name, version)
+}

@@ -1,4 +1,4 @@
-//Build test database schema
+//Build test database schema; run after schema.js
 //Copyright WyattERP.org; See license in root of this package
 // -----------------------------------------------------------------------------
 const assert = require("assert");
@@ -55,12 +55,12 @@ log.debug("History object:", hist.releases, hist.prev)
   })
 
   it('can commit release 1', function(done) {
-    Child.exec("wyseman init test.wmi -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman init test1.wmi -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
   it('can build a JSON official release schema file', function(done) {
     let sFile = SchemaFile(1)
-    Child.exec("wyseman -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
+    Child.exec("wyseman -R last -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
       let content = Fs.readFileSync(sFile).toString()
         , sch = JSON.parse(content)
 log.debug("Schema:", sch.prev.length)
@@ -97,16 +97,16 @@ log.debug("Delta object:", darr)
   })
 
   it('build items table with new column name', function(done) {
-    Child.exec("wyseman objects test1.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman objects test2.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
   it('can commit release 2', function(done) {
-    Child.exec("wyseman init test1.wmi -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman init test2.wmi -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
   it('can build release 2 schema file', function(done) {
     let sFile = SchemaFile(2)
-    Child.exec("wyseman -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
+    Child.exec("wyseman -R 2 -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
       let content = Fs.readFileSync(sFile).toString()
         , sch = JSON.parse(content)
 log.debug("Schema:", sch.prev.length)
@@ -124,16 +124,16 @@ log.debug("Schema:", sch.prev.length)
   })
 
   it('build items table after dropped column', function(done) {
-    Child.exec("wyseman objects test2.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman objects test3.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
   it('can commit release 3', function(done) {
-    Child.exec("wyseman init test2.wmi -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman init test3.wmi -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
   
   it('can build release 3 schema file', function(done) {
     let sFile = SchemaFile(3)
-    Child.exec("wyseman -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
+    Child.exec("wyseman -R last -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
       let content = Fs.readFileSync(sFile).toString()
         , sch = JSON.parse(content)
 log.debug("Schema:", sch.prev.length)
@@ -152,11 +152,11 @@ log.debug("Schema:", sch.prev.length)
   })
 
   it('build items table after added column w/ no delta', function(done) {
-    Child.exec("wyseman objects test3.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman objects test4.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
   it('can commit release 4', function(done) {
-    Child.exec("wyseman init test2.wmi -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman init test3.wmi -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
   it('can build release 4 schema file with explicit number', function(done) {
@@ -183,6 +183,25 @@ log.debug("delta:", row.delta, typeof row.delta)
       assert.ok(!row.delta)
       done()
     })
+  })
+
+  it('check Wyseman.hist release and archive info', function() {
+    let content = Fs.readFileSync(Path.join(SchemaDir, 'Wyseman.hist')).toString()
+      , hist = JSON.parse(content)
+log.debug("History object:", hist.releases, hist.prev)
+    assert.equal(hist.releases.length, 5)
+    assert.equal(hist.prev.length, 3)
+    assert.equal(hist.arch.length, 4)
+//log.debug("  arch:", hist.arch[0])
+    assert.ok(hist.arch[0].boot.slice(0,4) == 'eJzN')
+    assert.ok(hist.arch[0].init.slice(0,4) == 'eJyV')
+    assert.ok(hist.arch[0].dict.slice(0,4) == 'eJzN')
+    assert.ok(hist.arch[1].boot == null)		//Eliminated redundant archival info
+    assert.ok(hist.arch[2].boot == null)
+    assert.ok(hist.arch[2].init.slice(0,4) == 'eJyV')
+    assert.ok(hist.arch[3].boot == null)
+    assert.ok(hist.arch[3].init == null)
+    assert.ok(hist.arch[3].dict.slice(0,4) == 'eJzN')
   })
 
   it('can build schema file for older release 2', function(done) {
@@ -216,13 +235,14 @@ log.debug("Schema:", sch.prev.length)
 
   after('Delete working schema file', function() {
     Fs.rmSync(SchemaFile('1b'))
+    Fs.rmSync(SchemaFile('1'))
+    Fs.rmSync(SchemaFile('2'))
+    Fs.rmSync(SchemaFile('2b'))
+    Fs.rmSync(SchemaFile('3'))
   })
 
   after('Delete sample database', function(done) {
-    Child.exec(`dropdb -U ${DBAdmin} ${TestDB}`, (err, so) => {
-      if (err) done(err)
-      done()
-    })
+    Child.exec(`dropdb -U ${DBAdmin} ${TestDB}`, done)
   })
 
 })

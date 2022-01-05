@@ -1,4 +1,4 @@
-//Check dropping objects out of a schema
+//Check dropping objects out of a schema; run after versions.js
 //Copyright WyattERP.org; See license in root of this package
 // -----------------------------------------------------------------------------
 const assert = require("assert");
@@ -12,28 +12,15 @@ var log = Log('test-orphan')
 describe("Modify DB schema", function() {
   var db
 
+  before('Delete sample database if it exists', function(done) {
+    Child.exec(`dropdb -U ${DBAdmin} ${TestDB}`, (err, out) => done())
+  })
+
   it('Connect to and create database from JSON schema', function(done) {
     db = new DbClient(dbConfig, (chan, data)=>{}, ()=>{
       log.debug("Connected to schema DB"); 
       done()
     })
-  })
-
-  it('check Wyseman.hist release and archive info', function() {
-    let content = Fs.readFileSync(Path.join(SchemaDir, 'Wyseman.hist')).toString()
-      , hist = JSON.parse(content)
-log.debug("History object:", hist.releases, hist.prev)
-    assert.equal(hist.releases.length, 5)
-    assert.equal(hist.prev.length, 3)
-    assert.equal(hist.arch.length, 4)
-//log.debug("  arch:", hist.arch[0])
-    assert.ok(hist.arch[0].boot.slice(0,4) == 'eJzN')
-    assert.ok(hist.arch[0].init.slice(0,4) == 'eJyV')
-    assert.ok(hist.arch[0].dict.slice(0,4) == 'eJzN')
-    assert.ok(hist.arch[1].boot == null)		//Eliminates redundant archival info
-    assert.ok(hist.arch[2].boot == null)
-    assert.ok(hist.arch[3].boot == null)
-    assert.ok(hist.arch[3].init == null)
   })
 
   it('no migrations in Wyseman.delta file', function(done) {
@@ -49,7 +36,7 @@ log.debug("History object:", hist.releases, hist.prev)
   })
 
   it('can disable pruning', function(done) {
-    Child.exec("wyseman objects test4.wms --no-prune", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman objects testo.wms --no-prune", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
   it('obsolete table remains', function(done) {
@@ -63,7 +50,7 @@ log.debug("Items count:", row)
   })
 
   it('can prune obsolete object', function(done) {
-    Child.exec("wyseman objects test4.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+    Child.exec("wyseman objects testo.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
   it('obsolete table gets deleted', function(done) {
@@ -78,11 +65,6 @@ log.debug("Items count:", row)
   after('Disconnect from test database', function() {
     db.disconnect()
   })
-/*
-  after('Delete history, delta files', function() {
-    Fs.rmSync(Path.join(SchemaDir, 'Wyseman.delta'))
-    Fs.rmSync(Path.join(SchemaDir, 'Wyseman.hist'))
-  })
 
   after('Delete sample database', function(done) {
     Child.exec(`dropdb -U ${DBAdmin} ${TestDB}`, (err, so) => {
@@ -90,5 +72,5 @@ log.debug("Items count:", row)
       done()
     })
   })
-*/
+
 });
