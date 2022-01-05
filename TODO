@@ -1,10 +1,5 @@
 Wyseman TODO
-X- Can delete DB and re-create from wyseman with history
-X- Can reproduce/instantiate schema for any specified release
-- 
 - Run-time library automatically updates to latest schema version
 - Can test/re-test complete migration from one release to the next
 -  Include module for an application to test its own migrations
-- 
-- Remove legacy wyseman files
 - 
