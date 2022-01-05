@@ -66,7 +66,7 @@ log.debug("Items count:", row)
     Child.exec("wyseman objects test4.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
-  it('obsolete table gone', function(done) {
+  it('obsolete table gets deleted', function(done) {
     db.query("select count(*) from wmtest.items", null, (e, res) => {
       assert.ok(e != null)
       assert.equal(e.name, 'error')
@@ -91,5 +91,4 @@ log.debug("Items count:", row)
     })
   })
 */
-
 });

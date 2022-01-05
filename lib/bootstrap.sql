@@ -279,7 +279,7 @@ create or replace function wm.check_deps() returns boolean language plpgsql as $
     d		text;		-- Iterator
     darr	text[];		-- Accumulates cleaned up array
   begin
-    for orec in select * from wm.objects_v where not checked loop
+    for orec in select * from wm.objects_v where release = wm.next() and not checked loop
 -- raise notice 'Checking object:% rel:% deps:%', orec.object, orec.release, orec.deps;
       darr = '{}';
       foreach d in array orec.deps loop

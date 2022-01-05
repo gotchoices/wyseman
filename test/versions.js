@@ -60,7 +60,7 @@ log.debug("History object:", hist.releases, hist.prev)
 
   it('can build a JSON official release schema file', function(done) {
     let sFile = SchemaFile(1)
-    Child.exec("wyseman -R 1 -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
+    Child.exec("wyseman -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
       let content = Fs.readFileSync(sFile).toString()
         , sch = JSON.parse(content)
 log.debug("Schema:", sch.prev.length)
@@ -106,14 +106,14 @@ log.debug("Delta object:", darr)
 
   it('can build release 2 schema file', function(done) {
     let sFile = SchemaFile(2)
-    Child.exec("wyseman -R 2 -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
+    Child.exec("wyseman -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
       let content = Fs.readFileSync(sFile).toString()
         , sch = JSON.parse(content)
 log.debug("Schema:", sch.prev.length)
       assert.ok(sch.publish)
       assert.equal(sch.release, 2)
       assert.equal(sch.releases.length, 2)
-      assert.equal(sch.prev.length, 1)		//one historical objects yet
+      assert.equal(sch.prev.length, 1)
       done()
     })
   })
@@ -133,14 +133,14 @@ log.debug("Schema:", sch.prev.length)
   
   it('can build release 3 schema file', function(done) {
     let sFile = SchemaFile(3)
-    Child.exec("wyseman -R 3 -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
+    Child.exec("wyseman -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
       let content = Fs.readFileSync(sFile).toString()
         , sch = JSON.parse(content)
 log.debug("Schema:", sch.prev.length)
       assert.ok(sch.publish)
       assert.equal(sch.release, 3)
       assert.equal(sch.releases.length, 3)
-      assert.equal(sch.prev.length, 2)		//one historical objects yet
+      assert.equal(sch.prev.length, 2)
       done()
     })
   })
@@ -159,7 +159,7 @@ log.debug("Schema:", sch.prev.length)
     Child.exec("wyseman init test2.wmi -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
-  it('can build release 4 schema file', function(done) {
+  it('can build release 4 schema file with explicit number', function(done) {
     let sFile = SchemaFile(4)
     Child.exec("wyseman -R 4 -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
       let content = Fs.readFileSync(sFile).toString()
@@ -168,7 +168,7 @@ log.debug("Schema:", sch.prev.length)
       assert.ok(sch.publish)
       assert.equal(sch.release, 4)
       assert.equal(sch.releases.length, 4)
-      assert.equal(sch.prev.length, 3)		//one historical objects yet
+      assert.equal(sch.prev.length, 3)
       done()
     })
   })
@@ -185,8 +185,37 @@ log.debug("delta:", row.delta, typeof row.delta)
     })
   })
 
+  it('can build schema file for older release 2', function(done) {
+    let sFile = SchemaFile('2b')
+    Child.exec("wyseman -R 2 -S " + sFile, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
+      let content = Fs.readFileSync(sFile).toString()
+        , sch = JSON.parse(content)
+log.debug("Schema:", sch.prev.length)
+      assert.ok(sch.publish)
+      assert.equal(sch.release, 2)
+      assert.equal(sch.releases.length, 2)
+      assert.equal(sch.prev.length, 1)
+      done()
+    })
+  })
+
+  it('later-created schema 2b file matches original release 2 file', function(done) {
+    let oFile = SchemaFile('2')
+      , rFile = SchemaFile('2b')
+    Child.exec(`diff ${oFile} ${rFile}`, {cwd: SchemaDir}, (error,output) => {
+//log.debug("Diff:", e, 'O:', o)
+      assert.ok(error == null)
+      assert.equal(output, '')
+      done()
+    })
+  })
+
   after('Disconnect from test database', function() {
     db.disconnect()
+  })
+
+  after('Delete working schema file', function() {
+    Fs.rmSync(SchemaFile('1b'))
   })
 
   after('Delete sample database', function(done) {
