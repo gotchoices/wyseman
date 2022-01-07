@@ -451,10 +451,9 @@ raise notice '  Delta: %:%: %', orec.obj_nam, orec.obj_ver, cmd;
       for trec in select * from wm.objects where obj_ver > orec.obj_ver and obj_ver <= max_ver order by obj_ver loop
         perform wm.migrate(trec, max_ver);		-- migrate any later versions
       end loop;
-    else						-- called recursively
-      if orec.obj_ver < max_ver then			-- only the newly made version will do this in make
-        update wm.objects set del_idx = i, built = false where obj_typ = orec.obj_typ and obj_nam = orec.obj_nam and obj_ver = orec.obj_ver;
-      end if;
+    end if;
+    if orec.obj_ver < max_ver then			-- only the newly made version will do this in make
+      update wm.objects set del_idx = i, built = false where obj_typ = orec.obj_typ and obj_nam = orec.obj_nam and obj_ver = orec.obj_ver;
     end if;
     return true;
   end;

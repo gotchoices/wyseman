@@ -1,10 +1,6 @@
 Wyseman TODO
-X- Change delta field to array of Sql, or partial Sql, commands?
-X- Test dropping/restoring the database with some applied, uncommitted deltas in place
 X- Run-time library automatically updates to latest schema version
-- 
-- Can test/re-test complete migration from one release to the next
--  Include module for an application to test its own migrations
+X- Can test/re-test complete migration from every release to every other one
 - 
 - Future:
 - Enhance language support
