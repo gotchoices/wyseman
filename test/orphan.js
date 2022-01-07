@@ -9,7 +9,7 @@ const { TestDB, DBAdmin, Log, DbClient, SchemaDir, SchemaFile } = require('./set
 const dbConfig = {database: TestDB, user: DBAdmin, connect: true, schema: SchemaFile('4')}
 var log = Log('test-orphan')
 
-describe("Modify DB schema", function() {
+describe("Orphan: Modify DB schema", function() {
   var db
 
   before('Delete sample database if it exists', function(done) {
@@ -56,6 +56,7 @@ log.debug("Items count:", row)
   it('obsolete table gets deleted', function(done) {
     db.query("select count(*) from wmtest.items", null, (e, res) => {
       assert.ok(e != null)
+log.debug("Error info:", e)
       assert.equal(e.name, 'error')
       assert.equal(e.code, '42P01')
       done()
@@ -64,13 +65,6 @@ log.debug("Items count:", row)
 
   after('Disconnect from test database', function() {
     db.disconnect()
-  })
-
-  after('Delete sample database', function(done) {
-    Child.exec(`dropdb -U ${DBAdmin} ${TestDB}`, (err, so) => {
-      if (err) done(err)
-      done()
-    })
   })
 
 });

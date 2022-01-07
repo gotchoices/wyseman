@@ -12,8 +12,9 @@ foreach x {table_text column_text value_text message_text column_pub} {
 
 tabdef wm.objects -focus obj_nam -fields {
     {name	-size  40}
-    {checked	-size  4}
-    {clean	-size  4}
+    {checkit	-size  4}
+    {build	-size  4}
+    {built	-size  4}
     {mod_ver	-size  4}
     {deps	-size  40 -spf edw}
     {ndeps	-size  40 -spf edw}

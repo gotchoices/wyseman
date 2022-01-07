@@ -9,6 +9,7 @@ var schemaFile = function(release, extension = '.json') {
 
 module.exports = {
   TestDB: "wysemanTestDB",
+  Module: "wmtest",
   DBAdmin: "admin",
   SchemaDir: SchemaDir,
   Log: require(require.resolve('wyclif/lib/log.js')),

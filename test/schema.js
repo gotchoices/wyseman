@@ -1,6 +1,9 @@
 //Build test database schema; Run first
 //Copyright WyattERP.org; See license in root of this package
 // -----------------------------------------------------------------------------
+// TODO
+//- Enable logging in wyseman (not stdout) so we can watch it during test runs
+//- 
 const assert = require("assert");
 const Fs = require('fs')
 const Path = require('path')
@@ -12,7 +15,7 @@ var release = '1b'
 var sqlSchema = SchemaFile(release, '.sql')
 var jsonSchema = SchemaFile(release)
 
-describe("Build DB schema files", function() {
+describe("Schema: Build DB schema files", function() {
   var db
 
   before('Delete old history/migration files', function(done) {
@@ -137,7 +140,7 @@ log.debug("Schema objects:", sch.objects.length)
   })
 })
 
-describe("Build DB with canned SQL schema", function() {
+describe("Schema: Build DB with canned SQL schema", function() {
   var db
 
   it('Connect to and create database from sql schema', function(done) {
@@ -162,14 +165,6 @@ describe("Build DB with canned SQL schema", function() {
   after('Disconnect from test database', function(done) {
     db.disconnect()
     done()
-  })
-
-  after('Delete sql schema file', function() {
-    Fs.rmSync(sqlSchema)
-  })
-
-  after('Delete sample database', function(done) {
-    Child.exec(`dropdb -U ${DBAdmin} ${TestDB}`, done)
   })
 
 });

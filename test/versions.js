@@ -9,8 +9,12 @@ const { TestDB, DBAdmin, Log, DbClient, SchemaDir, SchemaFile, WmItems } = requi
 const dbConfig = {database: TestDB, user: DBAdmin, connect: true}
 var log = Log('test-schema')
 
-describe("Build/modify DB with canned JSON schema", function() {
+describe("Versions: Build/modify DB with canned JSON schema", function() {
   var db
+
+  before('Delete sample database', function(done) {
+    Child.exec(`dropdb -U ${DBAdmin} ${TestDB}`, done)
+  })
 
   it('Connect to and create database from JSON schema', function(done) {
     let config = Object.assign(dbConfig, {schema: SchemaFile('1b')})
@@ -100,6 +104,28 @@ log.debug("Delta object:", darr)
     Child.exec("wyseman objects test2.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
+  after('Disconnect from test database', function() {
+    db.disconnect()
+  })
+
+})
+
+describe("Versions: Recover/rebuild DB with existing deltas", function() {
+  var db
+
+  before('Delete sample database', function(done) {
+    Child.exec(`dropdb -U ${DBAdmin} ${TestDB}`, done)
+  })
+
+  it('Connect to and create database from schema-1', function(done) {
+    let config = Object.assign(dbConfig, {schema: SchemaFile('1')})
+    db = new DbClient(config, (chan, data)=>{}, done)
+  })
+
+  it('rebuild items table with new column name', function(done) {
+    Child.exec("wyseman objects test2.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+  })
+
   it('can commit release 2', function(done) {
     Child.exec("wyseman init test2.wmi -C", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
@@ -175,12 +201,13 @@ log.debug("Schema:", sch.prev.length)
 
   it('correct delta and next release value', function(done) {
     let sql = "select delta, wm.next() from wm.objects_v where obj_nam = 'wmtest.items' and release = 4"
-    db.query("select wm.next()", null, (e, res) => {if (e) done(e)
+    db.query(sql, null, (e, res) => {if (e) done(e)
       assert.equal(res.rows.length, 1)
       let row = res.rows[0]
       assert.equal(row.next, 5)
 log.debug("delta:", row.delta, typeof row.delta)
-      assert.ok(!row.delta)
+      assert.ok(!!row.delta)
+      assert.equal(row.delta.length, 0)
       done()
     })
   })
@@ -193,7 +220,7 @@ log.debug("History object:", hist.releases, hist.prev)
     assert.equal(hist.prev.length, 3)
     assert.equal(hist.arch.length, 4)
 //log.debug("  arch:", hist.arch[0])
-    assert.ok(hist.arch[0].boot.slice(0,4) == 'eJzN')
+    assert.ok(hist.arch[0].boot.slice(0,4) == 'eJy9')
     assert.ok(hist.arch[0].init.slice(0,4) == 'eJyV')
     assert.ok(hist.arch[0].dict.slice(0,4) == 'eJzN')
     assert.ok(hist.arch[1].boot == null)		//Eliminated redundant archival info
@@ -229,17 +256,12 @@ log.debug("Schema:", sch.prev.length)
     })
   })
 
-  after('Disconnect from test database', function() {
-    db.disconnect()
-  })
-
   after('Delete working schema file', function() {
-    Fs.rmSync(SchemaFile('1b'))
     Fs.rmSync(SchemaFile('2b'))
   })
 
-  after('Delete sample database', function(done) {
-    Child.exec(`dropdb -U ${DBAdmin} ${TestDB}`, done)
+  after('Disconnect from test database', function() {
+    db.disconnect()
   })
 
 })

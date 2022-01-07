@@ -12,8 +12,9 @@ tabtext wm.objects	{Objects}	{Keeps data on database tables, views, functions, e
     {obj_typ		{Type}		{The object type, for example: table, function, trigger, etc.}}
     {obj_nam		{Name}		{The schema and name of object as known within that schema}}
     {obj_ver		{Version}	{A sequential integer showing how many times this object has been modified, as a part of an official release.  Changes to the current (working) release do not increment this number.}}
-    {checked		{Checked}	{This record has had its dependencies and consistency checked}}
-    {clean		{Clean}		{The object represented by this record is built and current according to this create script}}
+    {checkit		{Check}		{This record needs to have its dependencies and consistency checked}}
+    {build		{Build}		{The object needs to be rebuilt according to an updated spec}}
+    {built		{Built}		{The object represented by this record is built and current according to this create script}}
     {module		{Module}	{The name of a code module (package) this object belongs to}}
     {deps		{Depends}	{A list of un-expanded dependencies for this object, exactly as expressed in the source file}}
     {ndeps		{Normal Deps}	{An expanded and normalized array of dependencies, guaranteed to exist in another record of the table}}
@@ -38,7 +39,7 @@ tabtext wm.objects_v_depth {Dep Objects}	{An enhanced view of the object table, 
     {depth		{Max Depth}	{The maximum depth of this object along any path in the dependency tree}}
 } -inherits wm.objects
 
-tabtext wm.objdeps_v	{Dependencies}	{A recursive view showing which database objects depend on (must be created after) other database objects.} {
+tabtext wm.objects_v_dep {Dependencies}	{A recursive view showing which database objects depend on (must be created after) other database objects.} {
     {object		{Object}	{Full object type and name (type:name)}}
     {od_typ		{Type}		{Function, view, table, etc}}
     {od_nam		{Name}		{Schema and name of object as known within that schema}}
