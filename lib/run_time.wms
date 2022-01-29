@@ -556,3 +556,40 @@ function {wm.commit()} {} {returns jsonb language plpgsql as $$
     return wm.hist(nxt);
   end;
 $$;}
+
+# Save the state of a table into a named file (primarily for testing)
+#-------------------------------------------
+function {wm.table_save(obj text, tag text)} {} {returns int language plpgsql as $$
+  declare
+    count	int;
+    file text = wm.workdir(current_database()) || '/' || obj || '-' || tag || '.save';
+    collist	text = array_to_string(
+      array(
+        select column_name::text from information_schema.columns where table_schema || '.' || table_name = obj order by ordinal_position
+    ),',');
+  begin
+    execute 'copy ' || obj || '(' || collist || ') to ''' || file || '''';
+    get diagnostics count = ROW_COUNT;
+    return count;
+  end;
+$$;}
+
+# Restore the state of a table from a named file (primarily for testing)
+#-------------------------------------------
+function {wm.table_rest(obj text, tag text)} {} {returns int language plpgsql as $$
+  declare
+    count	int;
+    file text = wm.workdir(current_database()) || '/' || obj || '-' || tag || '.save';
+    collist	text = array_to_string(
+      array(
+        select column_name::text from information_schema.columns where table_schema || '.' || table_name = obj order by ordinal_position
+    ),',');
+  begin
+    SET session_replication_role = replica;	-- Disable triggers
+    execute 'delete from ' || obj;
+    execute 'copy ' || obj || '(' || collist || ') from ''' || file || '''';
+    execute 'select count(*) from ' || obj || ';' into strict count;
+    SET session_replication_role = DEFAULT;
+    return count;
+  end;
+$$;}
