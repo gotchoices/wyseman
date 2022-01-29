@@ -349,7 +349,7 @@ create or replace function wm.make(
 --raise notice 'Pre-search:%', objs;
 
     select into objlist array_agg(distinct object) from wm.objects_v_dep o	-- Include dependencies
-      join (select unnest(objs) as obj) as d on d.obj = o.depend or d.obj = o.object;
+      join (select unnest(objs) as obj) as d on d.obj = any(o.fpath);
 --raise notice 'objlist:%', objlist;
     create temporary table _table_info (obj_nam text primary key, columns text, fname text, rows int);
 
