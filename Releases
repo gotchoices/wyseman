@@ -1,5 +1,12 @@
 Change Log:
 
+1.1.0	2022-Feb
+	- Port Wyseman CLI to JavaScript
+	- New JSON schema file format
+	- Mocha-based regression tests
+	- Schema migration capability
+	- Table save/restore scripts for testing
+
 1.0.21	2021-Nov
 	- Update webpack and other dependencies
 	- Handle encrypted UI connection better
