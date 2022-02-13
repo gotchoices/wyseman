@@ -36,6 +36,7 @@
     "pg-format": "^1.0.4",
     "pg-native": "^3.0.0",
     "splitargs": "^0.0.7",
+    "tcl": "^3.0.0",
     "ws": "^7.5.5"
   },
   "devDependencies": {

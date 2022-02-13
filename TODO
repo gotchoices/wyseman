@@ -1,6 +1,4 @@
 Wyseman TODO
-X- Run-time library automatically updates to latest schema version
-X- Can test/re-test complete migration from every release to every other one
 - 
 - Future:
 - Enhance language support
