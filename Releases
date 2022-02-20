@@ -1,5 +1,9 @@
 Change Log:
 
+1.1.2	2022-Feb
+	- Works with production node-tcl release
+	- Misc cleanups
+
 1.1.0	2022-Feb
 	- Port Wyseman CLI to JavaScript
 	- New JSON schema file format
