@@ -99,8 +99,7 @@ dbc.connect(() => {
     }
   }		//make
 
-  if (initSql != '') {
-    console.error("Running Initialization SQL")
+  if (initSql != '') {		//;console.error("Running Initialization SQL")
     db.x(initSql)
   }
 
