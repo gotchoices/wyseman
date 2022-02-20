@@ -263,7 +263,7 @@ view wm.column_pub {wm.column_data wm.column_text} {select
   , cd.nat_tab
   , cd.nat_sch || '.' || cd.nat_tab		as nat
   , cd.nat_col
-  , coalesce(vt.language, nt.language, 'en')	as language
+  , coalesce(vt.language, nt.language, 'eng')	as language
   , coalesce(vt.title, nt.title, cd.cdt_col)	as title
   , coalesce(vt.help, nt.help)			as help
   from		wm.column_data cd
@@ -333,7 +333,7 @@ view wm.column_lang {wm.column_data wm.column_text wm.value_text} {select
   , cd.nat_sch || '.' || cd.nat_tab		as nat
   , cd.nat_col
   , (select array_agg(to_jsonb(d)) from (select value, title, help from wm.value_text vt where vt.vt_sch = cd.nat_sch and vt.vt_tab = cd.nat_tab and vt.vt_col = cd.nat_col and vt.language = nt.language order by value) d) as values
-  , coalesce(ct.language, nt.language, 'en')	as language
+  , coalesce(ct.language, nt.language, 'eng')	as language
   , coalesce(ct.title, nt.title, cd.cdt_col)	as title
   , coalesce(ct.help, nt.help)			as help
   , cd.cdt_sch in ('pg_catalog','information_schema') as system
