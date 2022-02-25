@@ -16,6 +16,7 @@ var sqlSchema = SchemaFile(release, '.sql')
 var jsonSchema = SchemaFile(release)
 
 describe("Schema: Build DB schema files", function() {
+  this.timeout(3000)
   var db
 
   before('Delete old history/migration files', function(done) {
