@@ -348,10 +348,12 @@ proc wmparse::function {args} {
 #puts "         func:$func parms:$parms"
     set plist {}
     foreach parm [split $parms ,] {
-        if {![regexp -nocase {^out$} [lindex $parm 0]]} {	;#ignore output variables
-            if {[llength $parm] > 1} {set tp [lindex $parm 1]} else {set tp $parm}	;#only or second token should be the type
-            lappend plist [string trim $tp]
+        if {[lcontain {in out inout} [lindex $parm 0]]} {		;#remove argument mode if present
+          set parm [lreplace $parm 0 0]
         }
+#puts "         parm:$parm"
+        if {[llength $parm] > 1} {set tp [lindex $parm 1]} else {set tp $parm}	;#only or second token should be the type
+        lappend plist [string trim $tp]
     }
     set name "${func}([join $plist ,])"
 #puts "         name:$name"
