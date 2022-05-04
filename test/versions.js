@@ -103,7 +103,7 @@ log.debug("Delta object:", darr)
   it('build items table with new column name', function(done) {
     Child.exec("wyseman objects test2.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
-
+/* */
   after('Disconnect from test database', function() {
     db.disconnect()
   })
@@ -255,7 +255,7 @@ log.debug("Schema:", sch.prev.length)
       done()
     })
   })
-
+/* */
   after('Delete working schema file', function() {
     Fs.rmSync(SchemaFile('2b'))
   })
