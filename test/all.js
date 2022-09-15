@@ -14,6 +14,8 @@ require('./migrate.js')
 require('./checkdb.js')
 require('./metadata.js')
 
+require('./client.js')
+
 after('Delete history, delta, schema files', function() {
   Fs.rmSync(Path.join(SchemaDir, 'Wyseman.delta'))
   Fs.rmSync(Path.join(SchemaDir, 'Wyseman.hist'))
