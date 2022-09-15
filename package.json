@@ -1,6 +1,6 @@
 {
   "name": "wyseman",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "PostgreSQL Schema Manager with Javascript, Ruby, TCL API",
   "main": "lib/index.js",
   "scripts": {
@@ -31,9 +31,13 @@
     "wysegi": "bin/wysegi"
   },
   "dependencies": {
+    "b64u-lite": "^1.1.0",
+    "buffer": "^6.0.3",
     "node-fetch": "^2.6.2",
     "pg": "^8.7.3",
     "pg-format": "^1.0.4",
+    "web-encoding": "^1.1.5",
+    "winston": "^3.8.2",
     "ws": "^7.5.5"
   },
   "devDependencies": {

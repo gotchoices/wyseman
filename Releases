@@ -1,5 +1,9 @@
 Change Log:
 
+1.1.5	2022-Sep
+	- Track with other packages
+	- New platform-independent wyseman client API
+
 1.1.2	2022-Feb
 	- Works with production node-tcl release
 	- Misc cleanups
