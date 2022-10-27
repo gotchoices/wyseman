@@ -2,9 +2,9 @@
 -- Copyright WyattERP.org; See license in root of this package
 -- ----------------------------------------------------------------------------
 -- TODO:
--- - Default wm priv should be restricted.  Can public still use data-dictionary functions?
 -- - 
-create schema if not exists wm; grant usage on schema wm to public;
+create schema if not exists wm;
+grant usage on schema wm to public;
 
 -- Catalog of releases for objects to join to
 -- The largest release number is a work in process,  earlier ones are committed
