@@ -33,7 +33,7 @@ var opts = require('yargs')
   .alias('C', 'commit')	.boolean('commit').default('commit',	false,	'Commit official schema release in the default directory')
   .alias('r', 'replace').boolean('replace').default('replace',	false,	'Replace views/functions where possible')
   .alias('m', 'make')	.boolean('make').default('make',	true,	'Build any uninstantiated objects in the database')
-  .alias('p', 'prune')	.boolean('make').default('prune',	true,	'Remove any objects no longer in the source file(s)')
+  .alias('p', 'prune')	.boolean('prune').default('prune',	true,	'Remove any objects no longer in the source file(s)')
   .alias('d', 'drop')	.boolean('drop').default('drop',	true,	'Attempt to drop objects before creating')
   .alias('z', 'post')	.boolean('post').default('post',	true,	'Run the post-parse cleanup scans (default behavior)')
   .alias('q', 'quiet')	.boolean('quiet').default('quiet',	false,	'Suppress printing of database notices')
@@ -94,7 +94,7 @@ dbc.connect(() => {
     let branchVal = (opts.branch == '') ? null : "'{" + opts.branch.trim().split(' ').join(',') + "}'"
       , res = db.one(`select wm.make(${branchVal},${opts.drop},true);`)	//Make specified objects
     modified = res.make
-//console.log("make:", res)
+//console.log("make:", modified, res)
     if (parseInt(modified) > 0) {
       db.x("select wm.init_dictionary();")	//Re-initialize dictionary
     }
