@@ -38,7 +38,7 @@ var Suite1 = function({address, proto, htProto, credentials, localCA}) {
   })
 
   it('Launch SPA server', function(done) {
-    ss = new SpaServer({spaPort:httpPort, credentials}, log)
+    ss = new SpaServer({webPort:httpPort, credentials}, log)
     setTimeout(() => {
       done()
     }, 250)
@@ -156,7 +156,7 @@ describe("Test client/server connection/API", function() {
 
   before("Build test SSL certificates", function(done) {
     let dc = 2, _done = () => {if (!--dc) done()}       //dc _done's to be done
-      , caFile = Path.join(pkiLocal, 'spa-ca.crt')
+      , caFile = Path.join(pkiLocal, 'web-ca.crt')
     Child.exec("npx wyclif-cert localhost", {cwd: __dirname}, (e,o) => {
       if (e) done(e)
       Fs.readFile(caFile, (err, dat) => {	//Grab CA file contents
@@ -164,7 +164,7 @@ describe("Test client/server connection/API", function() {
         interTest.localCA = dat
         done()
       })
-      Fs.stat(Path.join(pkiLocal,'spa-localhost.crt'), (er, st) => {
+      Fs.stat(Path.join(pkiLocal,'web-localhost.crt'), (er, st) => {
         if (er) done(er)
         else _done()
       })
@@ -173,9 +173,9 @@ describe("Test client/server connection/API", function() {
 
   it("Call client/server API tests", function() {
     let address = 'localhost.localdomain'
-      , spaKey = Path.join(pkiLocal, 'spa-localhost.key')
-      , spaCert = Path.join(pkiLocal,'spa-localhost.crt')
-      , credentials = Credentials(spaKey, spaCert, null, log)
+      , webKey = Path.join(pkiLocal, 'web-localhost.key')
+      , webCert = Path.join(pkiLocal,'web-localhost.crt')
+      , credentials = Credentials(webKey, webCert, null, log)
       , config1 = {
           proto: 'ws',
           htProto: 'http',
