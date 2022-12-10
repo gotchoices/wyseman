@@ -13,7 +13,7 @@ table wm.table_style {} {
     ts_sch		name
   , ts_tab		name
   , sw_name		varchar not null
-  , sw_value		varchar not null
+  , sw_value		jsonb not null
   , inherit		boolean default true
   , primary key (ts_sch, ts_tab, sw_name)
 }
@@ -347,7 +347,7 @@ view wm.column_lang {wm.column_data wm.column_text wm.value_text} {select
 
 # Meta-data about tables/views, for public access
 #-------------------------------------------
-view wm.table_meta {wm.table_data wm.column_meta wm.fkeys_pub} {select
+view wm.table_meta {wm.table_data wm.table_style wm.column_meta wm.fkeys_pub} {select
     td.td_sch				as sch
   , td.td_tab				as tab
   , td.td_sch || '.' || td.td_tab	as obj
