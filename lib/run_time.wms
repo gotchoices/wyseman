@@ -140,6 +140,12 @@ view wm.view_column_usage {} {
   select * from information_schema.view_column_usage
 } -primary {view_schema view_name} -grant public
 
+# A dummy view to facilitate language messages
+#-------------------------------------------
+view wm.lang {} {
+  select true
+}
+
 # Initialize the cache of native tables/columns with default values
 # Scan through view_column_usage iteratively until we resolve to a relation of table type (the native table)
 #-------------------------------------------
