@@ -585,9 +585,10 @@ proc wmparse::tabdef {table args} {
     foreach {sw va} $jargs {			;#write table and column styles to database
         if {[string range $sw 0 0] != {-}} {error "Expected switch: $sw"}
         set caninherit [expr [lcontain {-reports -actions} $sw] ? false : true]
-#puts "sw:$sw caninherit:$caninherit"
+#puts "sw:$sw va:$va caninherit:$caninherit"
         append query "insert into wm.table_style (ts_sch,ts_tab,sw_name,sw_value,inherit) values ('$schema','$table','[string range $sw 1 end]','[regsub {'} [string trim $va] {''}]', $caninherit);\n"
     }
+#puts "query:$query"
 
     if {[set focus [lindex [xswitchs focus args] 0]] != {}} {	;#Apply default focus column to correct column
         append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) values ('$schema','$table','$focus','focus','true') on conflict do nothing;\n"

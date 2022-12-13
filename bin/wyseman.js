@@ -13,7 +13,6 @@ const Migrate = require('../lib/migrate')
 const History = require('../lib/history')
 const Path = require('path')
 const Fs = require('fs')
-const Pg = require('pg-native')
 const Env = process.env
 const ConFile = Path.resolve('.', 'Wyseman.conf')
 var config = {}

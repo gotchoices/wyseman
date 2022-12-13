@@ -1,0 +1,34 @@
+#!/usr/bin/env node
+//Test how pg and pg-native return jsonb types
+//Do prior to running: createdb testDB
+const PgNative = require('pg-native')
+const { Client } = require('pg')
+
+var runIt = function(db) {
+  db.querySync(`drop table if exists test;`)
+  db.querySync(`create table test (f1 text, f2 jsonb);`)
+  db.querySync(`insert into test (f1,f2) values ('value 1', '"JSON string"');`)
+  db.querySync(`insert into test (f1,f2) values ('value 1', '["JSON","array"]');`)
+  db.querySync(`insert into test (f1,f2) values ('value 1', '{"JSON":"object"}');`)
+  result = db.querySync("select f1,f2 from test;")
+  console.log("Native result:", result)
+}
+
+var dbNative = new PgNative()
+const types = dbNative._types		//;console.log('types:', types)
+types.setTypeParser(3802, d=>(d))	//Don't parse jsonb
+
+dbNative.connectSync('dbname=testDB')
+runIt(dbNative)
+
+var dbJS = new Client({database: 'testDB'})
+dbJS.connect().then(() => {}).then(() => {
+  return dbJS.query('select * from test')
+}).then((r, e) => {
+  console.log('e:', e, 'rows', JSON.stringify(r.rows))
+
+}).then(() => {
+  return dbJS.query('select f1,f2 from test')
+}).then((r, e) => {
+  console.log('e:', e, 'rows', r.rows)
+})
