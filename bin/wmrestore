@@ -30,7 +30,7 @@ if [ ! -d $workdir ]; then
   mkdir -p $workdir
 fi
 
-sql="select distinct od_nam from wm.depends_v where od_typ = 'table' and od_release = wm.release() and not od_nam like 'wm.%' order by 1"
+sql="select distinct od_nam from wm.objects_v_dep where od_typ = 'table' and od_release = wm.next() and not od_nam like 'wm.%' order by 1"
 for tab in $(psql -A -t $dbname $user -p $port -c "$sql"); do
   datfile="${workdir}/$tab.dat"
   echo "Restoring table: $tab from: $datfile"
