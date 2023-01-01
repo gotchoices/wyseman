@@ -51,6 +51,9 @@ tabtext wm.objects_v_dep {Dependencies}	{A recursive view showing which database
     {fpath		{Full Path}	{The full path of the dependency tree above this object (including this object).}}
 }
 
+tabtext wm.objects_v_max {Latest Objects}	{Updatable view of database objects with the largest, most current version number}
+tabtext wm.objects_v_next {Next Objects}	{View of database objects with the working release version number}
+
 tabtext wm.table_style	{Table Styles}	{Contains style flags to tell the GUI how to render each table or view} {
     {ts_sch		{Schema Name}	{The schema for the table this style pertains to}}
     {ts_tab		{Table Name}	{The name of the table this style pertains to}}
