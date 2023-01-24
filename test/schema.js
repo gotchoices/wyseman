@@ -9,8 +9,8 @@ const Fs = require('fs')
 const Path = require('path')
 const Child = require('child_process')
 const { TestDB, DBAdmin, Log, DbClient, SchemaDir, SchemaFile, WmItems } = require('./settings')
-const dbConfig = {database: TestDB, user: DBAdmin, connect: true}
 var log = Log('test-schema')
+const dbConfig = {database: TestDB, user: DBAdmin, connect: true, log}
 var release = '1b'
 var sqlSchema = SchemaFile(release, '.sql')
 var jsonSchema = SchemaFile(release)
@@ -52,10 +52,10 @@ log.debug("Tables:", res.rows)
     Child.exec("wyseman objects test1.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
-  it('should have 13 wyselib tables built', function(done) {
+  it('should have 15 wyselib tables built', function(done) {
     let sql = "select * from pg_tables where schemaname = 'base'"
     db.query(sql, null, (e, res) => {if (e) done(e)
-      assert.equal(res.rows.length, 13)
+      assert.equal(res.rows.length, 15)
       done()
     })
   })

@@ -13,17 +13,17 @@ const Wyseman = require('../lib/wyseman.js')
 const ClientAPI = require('../lib/client_ws.js')
 const Message = require('../lib/client_msg.js')
 const { Credentials, SpaServer } = require('wyclif')
-const wsPort = 54329
 const assert = require("assert");
 const webcrypto = require('crypto').webcrypto
 const { TestDB, DBAdmin, Log, DbClient, SchemaDir, SchemaFile } = require('./settings')
-const dbConfig = {database: TestDB, user: DBAdmin, connect: true, schema: SchemaFile('1b')}
+var log = Log('test-client')
+const dbConfig = {database: TestDB, user: DBAdmin, connect: true, schema: SchemaFile('1b'), log}
 const UserAgent = "Wyseman Websocket Test Client"
 const user = 'admin'
 const httpPort = 8002
+const wsPort = 8003
 const pkiLocal = Path.join(__dirname,'pki/local')
 var interTest = {}
-var log = Log('test-client')
 
 var Suite1 = function({address, proto, htProto, credentials, localCA}) {
   var db, wm, ss
@@ -38,7 +38,7 @@ var Suite1 = function({address, proto, htProto, credentials, localCA}) {
   })
 
   it('Launch SPA server', function(done) {
-    ss = new SpaServer({webPort:httpPort, credentials}, log)
+    ss = new SpaServer({uiPort:httpPort, credentials}, log)
     setTimeout(() => {
       done()
     }, 250)
@@ -46,7 +46,7 @@ var Suite1 = function({address, proto, htProto, credentials, localCA}) {
 
   it('Launch Wyseman server', function(done) {
     let dConf = {database: TestDB, log}
-      , sockConf = {log, websock: {port: wsPort, credentials}}
+      , sockConf = {websock: {port: wsPort, credentials}}
 
     wm = new Wyseman(dConf, sockConf, dbConfig)
     

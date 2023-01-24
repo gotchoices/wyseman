@@ -6,8 +6,8 @@ const Fs = require('fs')
 const Path = require('path')
 const Child = require('child_process')
 const { TestDB, DBAdmin, Log, DbClient, SchemaDir, SchemaFile } = require('./settings')
-const dbConfig = {database: TestDB, user: DBAdmin, connect: true, schema: SchemaFile('4')}
 var log = Log('test-orphan')
+const dbConfig = {database: TestDB, user: DBAdmin, connect: true, schema: SchemaFile('4'), log}
 
 describe("Orphan: Modify DB schema", function() {
   var db

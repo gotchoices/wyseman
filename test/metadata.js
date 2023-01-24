@@ -4,8 +4,8 @@
 const assert = require("assert");
 const Path = require('path')
 const { TestDB, DBAdmin, Log, DbClient, SchemaDir, SchemaFile, WmItems } = require('./settings')
-const dbConfig = {database: TestDB, user: DBAdmin, connect: true}
 var log = Log('test-metadata')
+const dbConfig = {database: TestDB, user: DBAdmin, connect: true, log}
 
 describe("Check JSON structures in data dictionary", function() {
   var db
