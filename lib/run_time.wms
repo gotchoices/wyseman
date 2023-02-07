@@ -525,7 +525,7 @@ view wm.role_members {} {
   select ro.rolname				as role
   , me.rolname					as member
   , (string_to_array(ro.rolname,'_'))[1]	as priv
-  , (string_to_array(ro.rolname,'_'))[2]	as level
+  , (string_to_array(ro.rolname,'_'))[2]::int	as level
     from        	pg_auth_members am
     join        	pg_authid       ro on ro.oid = am.roleid
     join        	pg_authid       me on me.oid = am.member
