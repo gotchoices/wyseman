@@ -1,5 +1,10 @@
 Change Log:
 
+1.1.9	2023-Feb
+	- Connection crypto uses ECDSA algorithm
+	- Cache language data
+	- Bug fixes
+
 1.1.5	2022-Sep
 	- Track with other packages
 	- New platform-independent wyseman client API
