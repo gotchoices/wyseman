@@ -1,0 +1,57 @@
+#!/usr/bin/env node
+// Create a wyseman language description file (wmt) from data existing in the database
+// The file must at least contain the columns: type, sch, tab, col, tab, language, title, help
+//Copyright WyattERP.org; See license in root of this package
+// ------------------------------------------
+const Fs = require('fs')
+const Path = require('path')
+const Format = require('pg-format')
+const DbSync = require('../lib/dbsync')
+const { parse } = require('csv-parse')
+const Env = process.env
+const ConFile = Path.resolve('.', 'Wyseman.conf')
+var config = {}
+if (Fs.existsSync(ConFile)) config = require(ConFile)		//;console.log("config:", config)
+
+var opts = require('yargs')
+  .alias('n', 'dbname')	.default('dbname',	config.dbname || Env.WYSEMAN_DB,			'Specify the database name explicitly (rather than defaulting to the username)')
+  .alias('h', 'host')	.default('host',	config.host || Env.WYSEMAN_HOST || 'localhost','Specify the database host name explicitly (rather than defaulting to the local system)')
+  .alias('P', 'port')	.default('port',	config.port || Env.WYSEMAN_PORT || 5432,	'Specify the database port explicitly (rather than defaulting to 5432)')
+  .alias('u', 'user')	.default('user',	config.user || Env.WYSEMAN_USER || 'admin',	'Specify the database user name explicitly (rather than defaulting to the username)')
+  .alias('s', 'schema')	.default('schema',	null,	'Export items belonging only to this schema')
+  .alias('v', 'view')	.default('view',	null,	'Export items only for the specified view (or table)')
+  .alias('l', 'language').default('language',	'eng',	'Export items only for the specified language')
+  .alias('q', 'quiet')	.boolean('quiet').default('quiet',	false,	'Suppress printing of database notices')
+  .argv
+var argv = opts._				//;console.log("opts:", opts, "argv:", argv)
+
+var db = new DbSync(opts)			//Connect to database
+
+var mkWhere = function(prefix = 'tt') {
+  let where = [`language = ${Format.literal(opts.language)}`]
+  if (opts.schema) where.push(`${prefix}_sch = ${Format.literal(opts.schema)}`)
+  if (opts.view) where.push(`${prefix}_tab = ${Format.literal(opts.view)}`)
+  return where
+}
+
+let tSql = `select * from wm.table_text where ${mkWhere('tt').join(' and ')}`
+let tabs = db.x(tSql)				//;console.log("tabs:", tabs)
+for (let tab of tabs) {				//;console.log('tab:', tab)
+  console.log(`tabtext -lang ${tab.language} {${tab.tt_sch}.${tab.tt_tab}} {${tab.title}} {${tab.help}} {`)
+
+  let cSql = `select * from wm.column_text where ${mkWhere('ct').join(' and ')}`
+  let cols = db.x(cSql)
+  for (let col of cols) {			//;console.log('col:', col)
+    console.log(`  {${col.ct_col} {${col.title}} {${col.help}}}`)
+  }
+
+  console.log('} -messages {')
+
+  let mSql = `select * from wm.message_text where ${mkWhere('mt').join(' and ')}`
+  let msgs = db.x(mSql)
+  for (let msg of msgs) {			//;console.log('msg:', msg)
+    console.log(`  {${msg.code} {${msg.title}} {${msg.help}}}`)
+  }
+  
+  console.log('}')
+}

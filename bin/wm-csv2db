@@ -1,0 +1,80 @@
+#!/usr/bin/env node
+// Install language data from a CSV file into a live database
+// The file must at least contain the columns: type, sch, tab, col, tab, language, title, help
+//Copyright WyattERP.org; See license in root of this package
+// ------------------------------------------
+const Fs = require('fs')
+const Path = require('path')
+const Format = require('pg-format')
+const DbSync = require('../lib/dbsync')
+const { parse } = require('csv-parse')
+const Env = process.env
+const ConFile = Path.resolve('.', 'Wyseman.conf')
+var config = {}
+if (Fs.existsSync(ConFile)) config = require(ConFile)		//;console.log("config:", config)
+
+var opts = require('yargs')
+  .alias('n', 'dbname')	.default('dbname',	config.dbname || Env.WYSEMAN_DB,			'Specify the database name explicitly (rather than defaulting to the username)')
+  .alias('h', 'host')	.default('host',	config.host || Env.WYSEMAN_HOST || 'localhost','Specify the database host name explicitly (rather than defaulting to the local system)')
+  .alias('P', 'port')	.default('port',	config.port || Env.WYSEMAN_PORT || 5432,	'Specify the database port explicitly (rather than defaulting to 5432)')
+  .alias('u', 'user')	.default('user',	config.user || Env.WYSEMAN_USER || 'admin',	'Specify the database user name explicitly (rather than defaulting to the username)')
+  .alias('q', 'quiet')	.boolean('quiet').default('quiet',	false,	'Suppress printing of database notices')
+  .argv
+var argv = opts._				//;console.log("opts:", opts, "argv:", argv)
+
+const tabFields = {
+  table: ['tt_sch', 'tt_tab'],
+  column: ['ct_sch', 'ct_tab', 'ct_col'],
+  value:  ['vt_sch', 'vt_tab', 'vt_col', 'value'],
+  message: ['mt_sch', 'mt_tab', 'code']
+}
+const allFields = ['language','title','help']
+argv.forEach(file => {
+  let csvText = Fs.readFileSync(file)		//Read CSV file
+    , records = {table: [], column: [], value: [], message: []}
+    , sqls = []
+    , db = new DbSync(opts)			//Connect to database
+
+  parse(csvText, {columns: true}, (err, rows) => {
+    rows.forEach(row => {			//;console.log('row:', row)
+      let table = `wm.${row.type}_text`
+        , keyValues = [Format.literal(row.sch), Format.literal(row.tab)]
+        , langValues = [Format.literal(row.to_lang), Format.literal(row.title), Format.literal(row.help)] 
+
+      switch (row.type) {
+        case 'table':
+          break;
+        case 'column':
+          keyValues.push(Format.literal(row.col))
+          break;
+        case 'value':
+          keyValues.push(Format.literal(row.col))
+          keyValues.push(Format.literal(row.tag))
+          break;
+        case 'message':
+          keyValues.push(Format.literal(row.tag))
+          break;
+      }
+      if (row.title || row.help)
+        records[row.type].push(keyValues.concat(langValues))
+    })
+
+    Object.keys(records).forEach(type => {
+      if (records[type].length > 0) {
+        let fields = tabFields[type].slice().concat(allFields)
+          , sql = `insert into wm.${type}_text (${fields.join(',')}) values\n`
+          , recs = []
+          , pkFields = tabFields[type].slice().concat(['language'])
+        records[type].forEach(rec => {
+          recs.push(`(${rec})`)
+        })
+        sql += recs.join(',\n') + '\n'
+        sql += `on conflict (${pkFields}) do update set title = EXCLUDED.title, help = EXCLUDED.help`
+        sqls.push(sql)				//;console.log('sql:', sql)
+      }
+    })
+    if (sqls.length > 0) {
+      db.x(sqls.join(';\n'))
+    }
+  })
+})
