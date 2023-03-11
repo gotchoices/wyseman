@@ -15,5 +15,5 @@ module.exports = {
   Log: require(require.resolve('wyclif/lib/log.js')),
   DbClient: require("../lib/dbclient.js"),
   SchemaFile: schemaFile,
-  WmItems: 199
+  WmItems: 204
 }

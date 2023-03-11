@@ -20,7 +20,8 @@ describe("Build DB and check data dictionary", function() {
   })
 
   it('Check for undocumented tables', function(done) {
-    let sql = "select sch,tab from wm.table_lang where language = 'en' and help isnull and sch = 'wm' order by 1,2"
+    let sql = `select * from wm.table_data td where td_sch = 'wm' and not exists 
+      (select * from wm.table_text tt where tt.tt_sch = td.td_sch and tt.tt_tab = td.td_tab and tt.language = 'eng');`
     db.query(sql, null, (err, res) => {
       if (err) done(err)
       log.debug("Tables:", res.rows)
@@ -30,7 +31,7 @@ describe("Build DB and check data dictionary", function() {
   })
 
   it('Check for undocumented columns', function(done) {
-    let sql = "select sch,tab,col from wm.column_lang where language = 'en' and help isnull and sch = 'wm' order by 1,2"
+    let sql = "select sch,tab,col from wm.column_lang where language = 'eng' and help isnull and sch = 'wm' order by 1,2"
 log.debug("SQL:", sql)
     db.query(sql, null, (err, res) => {
       if (err) done(err)

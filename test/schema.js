@@ -14,6 +14,7 @@ const dbConfig = {database: TestDB, user: DBAdmin, connect: true, log}
 var release = '1b'
 var sqlSchema = SchemaFile(release, '.sql')
 var jsonSchema = SchemaFile(release)
+var interTest = {}
 
 describe("Schema: Build DB schema files", function() {
   this.timeout(3000)
@@ -52,10 +53,10 @@ log.debug("Tables:", res.rows)
     Child.exec("wyseman objects test1.wms", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
 
-  it('should have 15 wyselib tables built', function(done) {
+  it('check for number of wyselib tables built', function(done) {
     let sql = "select * from pg_tables where schemaname = 'base'"
     db.query(sql, null, (e, res) => {if (e) done(e)
-      assert.equal(res.rows.length, 15)
+      assert.equal(res.rows.length, 17)
       done()
     })
   })
@@ -163,6 +164,27 @@ describe("Schema: Build DB with canned SQL schema", function() {
     })
   })
 
+  it('counting rows in wm.column_data', function(done) {
+    let sql = "select count(*) from wm.column_data where cdt_sch in ('wm','wylib') and field >= 0"
+    db.query(sql, null, (e, res) => {if (e) done(e)
+      assert.equal(res.rows.length, 1)
+      let row = res.rows[0]
+      assert(row.count > 0)			;log.debug('cd:', row.count)
+      interTest.rowCount = row.count
+      done()
+    })
+  })
+
+  it('comparing rows in wm.column_lang', function(done) {
+    let sql = "select count(*) from wm.column_lang where sch in ('wm','wylib') and language = 'eng'"
+    db.query(sql, null, (e, res) => {if (e) done(e)
+      assert.equal(res.rows.length, 1)
+      let row = res.rows[0]
+      assert.equal(row.count, interTest.rowCount)
+      done()
+    })
+  })
+/* */
   after('Disconnect from test database', function(done) {
     db.disconnect()
     done()

@@ -129,7 +129,7 @@ The main difficulties are presented by:
   default value.
 
 - Missing Columns
-  If a column is renamed or removed rom one version to the next, we really need
+  If a column is renamed or removed from one version to the next, we really need
   some kind of alter script to run just prior to the drop/create cycle on the
   table.  This will be done in a transaction so it can be safe from other
   accesses going on.  But it will really be up to the developer to write this

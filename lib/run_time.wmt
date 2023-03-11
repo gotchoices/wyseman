@@ -290,6 +290,7 @@ tabtext wm.column_ambig	{Ambiguous Columns} {A view showing view and their colum
 }
 
 tabtext wm.lang {Language Text} {Language messages pertaining to Wyseman service routines} {
+  {always	{Always}	{Always true}}
 } -message {
     {badOperator	{Invalid Operator}	{The specified logic operator is not understood}}
     {badAction		{Invalid Action}	{The requested action was not recognized}}
@@ -306,4 +307,19 @@ tabtext wm.lang {Language Text} {Language messages pertaining to Wyseman service
     {badLogic		{Invalid Logic}		{The logic structure was not understood}}
     {23505		{Key Violation}		{An operation would have resulted in multiple records having duplicated data, which is required to be unique}}
 }
-#    {X		{}		{}}
+
+tabtext wm.language {Translation Data} {Language data organized for creation of translation tables} {
+  {sch		{Schema}	{Database schema for the subject table/view}}
+  {tab		{Table}		{Subject table or view}}
+  {obj		{Object}	{Full name (schema.view) of the table/view}}
+  {type		{Type}		{Type of language tag (table, column, value, message)}}
+  {col		{Column}	{Column name if applicable}}
+  {tag		{Tag}		{Code for a value or message type}}
+  {fr_lang	{From Language}	{Language being translated from}}
+  {fr_title	{From Title}	{Title in comparison language}}
+  {fr_help	{From Help}	{Help message in comparison language}}
+  {language	{Language}	{Target language to translate to}}
+  {title	{Title}		{Title in target language}}
+  {help		{Help}		{Help message in target language}}
+  {sorter	{Sorter}	{A sort field to organize language tags in association with their view and/or column}}
+}
