@@ -345,7 +345,7 @@ view wm.column_lang {wm.column_data wm.column_text wm.value_text} {select
   , cd.cdt_sch in ('pg_catalog','information_schema') as system
   from		wm.column_data cd
     left join	wm.column_text nt	on nt.ct_sch = cd.nat_sch and nt.ct_tab = cd.nat_tab and nt.ct_col = cd.nat_col
-    left join	wm.column_text ct	on ct.ct_sch = cd.cdt_sch and ct.ct_tab = cd.cdt_tab and ct.ct_col = cd.cdt_col 	--(No!) and ct.language = nt.language
+    left join	wm.column_text ct	on ct.ct_sch = cd.cdt_sch and ct.ct_tab = cd.cdt_tab and ct.ct_col = cd.cdt_col and ct.language = nt.language
 
     where	cd.cdt_col != '_oid'
     and		cd.field >= 0;
@@ -378,8 +378,9 @@ view wm.table_lang {wm.table_data wm.table_text wm.column_lang wm.message_text} 
   , tt.language
   , tt.title
   , tt.help
-  , array (select jsonb_object(array['code', code, 'title', title, 'help', help]) from wm.message_text mt where mt.mt_sch = td.td_sch and mt.mt_tab = td.td_tab and mt.language = tt.language order by code) as messages
-  , (select array_agg(to_jsonb(d)) from (select col, title, help, values from wm.column_lang cl where cl.sch = td.td_sch and cl.tab = td.td_tab and cl.language = tt.language) d) as columns
+--  , array (select jsonb_object(array['code', code, 'title', title, 'help', help]) from wm.message_text mt where mt.mt_sch = td.td_sch and mt.mt_tab = td.td_tab and mt.language = tt.language order by code) as messages
+  , (select array_agg(to_jsonb(d)) from (select code, title, help from wm.message_text mt where mt.mt_sch = tt.tt_sch and mt.mt_tab = tt.tt_tab and mt.language = tt.language) d) as messages
+  , (select array_agg(to_jsonb(d)) from (select col, title, help, values from wm.column_lang cl where cl.sch = tt.tt_sch and cl.tab = tt.tt_tab and cl.language = tt.language) d) as columns
   from		wm.table_data		td
   left join	wm.table_text		tt on td.td_sch = tt.tt_sch and td.td_tab = tt.tt_tab;
 } -primary {sch tab language} -grant public -native {{wm.table_text title help language}}
@@ -599,3 +600,62 @@ function {wm.table_rest(obj text, tag text)} {} {returns int language plpgsql as
     return count;
   end;
 $$;}
+
+# Language data organized for creation of translation tables
+# Not typically used in production environment
+#-------------------------------------------
+view wm.language {wm.table_text wm.column_text wm.value_text wm.message_text} {select
+  tt.tt_sch as sch, tt.tt_tab as tab, tt.tt_sch || '.' || tt.tt_tab as obj,
+    lv.type, lv.col, lv.tag,
+    lv.fr_lang, lv.fr_title, lv.fr_help,
+    lv.to_lang, lv.title, lv.help,
+    lv.sorter
+  
+  from		wm.table_text	tt
+  join	(
+    select fx.tt_sch as sch, fx.tt_tab as tab, 'table' as type,
+      null as col, null as tag,
+      fx.language as fr_lang,	fx.title as fr_title,	fx.help as fr_help,
+      tx.language as to_lang,	tx.title,		tx.help,
+      fx.tt_sch || '.' || fx.tt_tab  as sorter
+        from wm.table_text	fx
+        left join wm.table_text	tx
+          on tx.tt_sch = fx.tt_sch and tx.tt_tab = fx.tt_tab
+          and tx.language != fx.language
+  
+    union all
+    select fx.ct_sch as sch, fx.ct_tab as tab, 'column' as type,
+      fx.ct_col as col, null as tag,
+      fx.language as fr_lang,	fx.title as fr_title,	fx.help as fr_help,
+      tx.language as to_lang,	tx.title,		tx.help,
+      fx.ct_sch || '.' || fx.ct_tab || '.' || 'c.' || fx.ct_col as sorter
+        from wm.column_text	fx
+        left join wm.column_text	tx
+          on tx.ct_sch = fx.ct_sch and tx.ct_tab = fx.ct_tab and tx.ct_col = fx.ct_col
+          and tx.language != fx.language
+
+    union all
+    select fx.vt_sch as sch, fx.vt_tab as tab, 'value' as type,
+      fx.vt_col as col, fx.value as tag,
+      fx.language as fr_lang,	fx.title as fr_title,	fx.help as fr_help,
+      tx.language as to_lang,	tx.title,		tx.help,
+      fx.vt_sch || '.' || fx.vt_tab || '.' || 'c.' || fx.vt_col || '.' || fx.value as sorter
+        from wm.value_text	fx
+        left join wm.value_text	tx
+          on tx.vt_sch = fx.vt_sch and tx.vt_tab = fx.vt_tab and tx.vt_col = fx.vt_col and tx.value = fx.value
+          and tx.language != fx.language
+
+    union all
+    select fx.mt_sch as sch, fx.mt_tab as tab, 'message' as type,
+      null as col, fx.code as tag,
+      fx.language as fr_lang,	fx.title as fr_title,	fx.help as fr_help,
+      tx.language as to_lang,	tx.title,		tx.help,
+      fx.mt_sch || '.' || fx.mt_tab || '.' || 'm.' || fx.code as sorter
+        from wm.message_text	fx
+        left join wm.message_text	tx
+          on tx.mt_sch = fx.mt_sch and tx.mt_tab = fx.mt_tab and tx.code = fx.code
+          and tx.language != fx.language
+
+  ) lv on lv.sch = tt.tt_sch and lv.tab = tt.tt_tab and lv.fr_lang = tt.language
+  order by lv.sorter;
+} -primary {sch tab type col tag}
