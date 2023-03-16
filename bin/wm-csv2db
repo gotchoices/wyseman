@@ -39,7 +39,7 @@ argv.forEach(file => {
     rows.forEach(row => {			//;console.log('row:', row)
       let table = `wm.${row.type}_text`
         , keyValues = [Format.literal(row.sch), Format.literal(row.tab)]
-        , langValues = [Format.literal(row.to_lang), Format.literal(row.title), Format.literal(row.help)] 
+        , langValues = [Format.literal(row.language), Format.literal(row.title), Format.literal(row.help)] 
 
       switch (row.type) {
         case 'table':

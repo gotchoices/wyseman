@@ -27,31 +27,40 @@ var argv = opts._				//;console.log("opts:", opts, "argv:", argv)
 
 var db = new DbSync(opts)			//Connect to database
 
-var mkWhere = function(prefix = 'tt') {
+var mkWhere = function(prefix = '', view = opts.view) {
   let where = [`language = ${Format.literal(opts.language)}`]
-  if (opts.schema) where.push(`${prefix}_sch = ${Format.literal(opts.schema)}`)
-  if (opts.view) where.push(`${prefix}_tab = ${Format.literal(opts.view)}`)
+  if (opts.schema) where.push(`${prefix}sch = ${Format.literal(opts.schema)}`)
+  if (view) where.push(`${prefix}tab = ${Format.literal(view)}`)
   return where
 }
 
-let tSql = `select * from wm.table_text where ${mkWhere('tt').join(' and ')}`
+let tSql = `select * from wm.table_lang where ${mkWhere('').join(' and ')}`
 let tabs = db.x(tSql)				//;console.log("tabs:", tabs)
 for (let tab of tabs) {				//;console.log('tab:', tab)
-  console.log(`tabtext -lang ${tab.language} {${tab.tt_sch}.${tab.tt_tab}} {${tab.title}} {${tab.help}} {`)
+  console.log(`tabtext ${tab.sch}.${tab.tab} -lang ${tab.language} {${tab.title}} {${tab.help}} {`)
 
-  let cSql = `select * from wm.column_text where ${mkWhere('ct').join(' and ')}`
+  let cSql = `select * from wm.column_lang where ${mkWhere('', tab.tab).join(' and ')} order by field`
   let cols = db.x(cSql)
   for (let col of cols) {			//;console.log('col:', col)
-    console.log(`  {${col.ct_col} {${col.title}} {${col.help}}}`)
+    if (col.obj == col.nat && col.title && col.help) {
+      console.log(`  {${col.col} {${col.title}} {${col.help}}` + (col.values ? ' {' : '}'))
+      if (col.values?.length > 0) {
+        col.values.forEach(val => {
+          console.log(`    {${val.value} {${val.title}} {${val.help}}}`)
+        })
+        console.log(col.values ? '  }}' : '  }')
+      }
+    }
   }
 
-  console.log('} -messages {')
-
-  let mSql = `select * from wm.message_text where ${mkWhere('mt').join(' and ')}`
-  let msgs = db.x(mSql)
-  for (let msg of msgs) {			//;console.log('msg:', msg)
-    console.log(`  {${msg.code} {${msg.title}} {${msg.help}}}`)
+  if (tab.messages) {
+    console.log('} -messages {')
+    tab.messages.sort((a, b) => {
+      return a.code < b.code ? -1 : a.code > b.code ? 1 : 0
+    }).forEach(msg => {				//;console.log('msg:', msg)
+      console.log(`  {${msg.code} {${msg.title}} {${msg.help}}}`)
+    })
   }
-  
-  console.log('}')
+
+  console.log('}\n')
 }
