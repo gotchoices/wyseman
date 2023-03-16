@@ -227,7 +227,6 @@ tabtext wm.fkeys_pub	{Keys}			{Public view to see foreign key relationships betw
     {tt_obj		{Object}		{Concatenated schema.table that has the referencing key fields}}
     {tn_sch		{Nat Schema}		{The schema of the native table that has the referencing key fields}}
     {tn_tab		{Nat Table}		{The name of the native table that has the referencing key fields}}
-    {tn_cols		{Nat Columns}		{The name of the columns in the native referencing table's key}}
     {tn_obj		{Nat Object}		{Concatenated schema.table for the native table that has the referencing key fields}}
     {ft_sch		{For Schema}		{The schema of the table that is referenced by the key fields}}
     {ft_tab		{For Table}		{The name of the table that is referenced by the key fields}}
@@ -235,7 +234,6 @@ tabtext wm.fkeys_pub	{Keys}			{Public view to see foreign key relationships betw
     {ft_obj		{For Object}		{Concatenated schema.table for the table that is referenced by the key fields}}
     {fn_sch		{For Nat Schema}	{The schema of the native table that is referenced by the key fields}}
     {fn_tab		{For Nat Table}		{The name of the native table that is referenced by the key fields}}
-    {fn_cols		{For Nat Columns}	{The name of the columns in the native referenced by the key}}
     {fn_obj		{For Nat Object}	{Concatenated schema.table for the native table that is referenced by the key fields}}
 }
     

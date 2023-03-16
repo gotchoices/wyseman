@@ -34,7 +34,7 @@ var mkWhere = function(prefix = '', view = opts.view) {
   return where
 }
 
-let tSql = `select * from wm.table_lang where ${mkWhere('').join(' and ')}`
+let tSql = `select * from wm.table_lang where ${mkWhere('').join(' and ')} order by sch,tab`
 let tabs = db.x(tSql)				//;console.log("tabs:", tabs)
 for (let tab of tabs) {				//;console.log('tab:', tab)
   console.log(`tabtext ${tab.sch}.${tab.tab} -lang ${tab.language} {${tab.title}} {${tab.help}} {`)
@@ -42,7 +42,8 @@ for (let tab of tabs) {				//;console.log('tab:', tab)
   let cSql = `select * from wm.column_lang where ${mkWhere('', tab.tab).join(' and ')} order by field`
   let cols = db.x(cSql)
   for (let col of cols) {			//;console.log('col:', col)
-    if (col.obj == col.nat && col.title && col.help) {
+    if (col.sch == col.nat_sch && col.tab == col.nat_tab 
+          && (col.help || col.title != col.col )) {
       console.log(`  {${col.col} {${col.title}} {${col.help}}` + (col.values ? ' {' : '}'))
       if (col.values?.length > 0) {
         col.values.forEach(val => {
