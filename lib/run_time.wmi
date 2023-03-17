@@ -4,6 +4,9 @@
 
 baseLang="eng"
 echo
-for t in table column value message; do
-  echo "delete from wm.${t}_text where language != '${baseLang}';"
+for ts in "table tt" "column ct" "value vt" "message mt"; do
+  read t x junk <<<$(echo $ts)			#;echo "t:$t x:$x"
+  echo "delete from wm.${t}_text ta where language != '${baseLang}' or not exists\
+    (select * from wm.table_lang where sch = ta.${x}_sch and tab = ta.${x}_tab);
+  "
 done
