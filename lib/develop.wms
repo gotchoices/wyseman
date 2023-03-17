@@ -1,0 +1,137 @@
+# Schema components not typically used in production environment
+module wyseman
+
+# Show view columns that have ambiguous native tables
+# There should ideally not be any records, at least where spec = false (no explicit native definition)
+#-------------------------------------------
+view wm.column_ambig {wm.view_column_usage wm.column_native} {select
+    cu.view_schema	as sch
+  , cu.view_name	as tab
+  , cu.column_name	as col
+  , cn.nat_exp		as spec
+  , count(*)		as count
+  , array_agg(cu.table_name::varchar order by cu.table_name desc)	as natives
+    from		wm.view_column_usage		cu
+    join		wm.column_native		cn on cn.cnt_sch = cu.view_schema and cn.cnt_tab = cu.view_name and cn.cnt_col = cu.column_name
+    where		view_schema not in ('pg_catalog','information_schema')
+    group by		1,2,3,4
+    having		count(*) > 1;
+} -primary {sch tab col}
+
+# Commit current state to be an official release
+#-------------------------------------------
+function {wm.commit()} {} {returns jsonb language plpgsql as $$
+  declare
+    nxt int = wm.next();
+  begin
+    update wm.releases set committed = current_timestamp where release = nxt;
+    insert into wm.releases (release) values (nxt + 1);
+    update wm.objects set max_rel = nxt + 1 where max_rel = nxt;
+    nxt = nxt + 1;	-- used below
+    return wm.hist(nxt);
+  end;
+$$;}
+
+# Save the state of a table into a named file (primarily for testing)
+#-------------------------------------------
+function {wm.table_save(obj text, tag text)} {} {returns int language plpgsql as $$
+  declare
+    count	int;
+    file text = wm.workdir(current_database()) || '/' || obj || '-' || tag || '.save';
+    collist	text = array_to_string(
+      array(
+        select column_name::text from information_schema.columns where table_schema || '.' || table_name = obj order by ordinal_position
+    ),',');
+  begin
+    execute 'copy ' || obj || '(' || collist || ') to ''' || file || '''';
+    get diagnostics count = ROW_COUNT;
+    return count;
+  end;
+$$;}
+
+# Restore the state of a table from a named file (primarily for testing)
+#-------------------------------------------
+function {wm.table_rest(obj text, tag text)} {} {returns int language plpgsql as $$
+  declare
+    count	int;
+    file text = wm.workdir(current_database()) || '/' || obj || '-' || tag || '.save';
+    collist	text = array_to_string(
+      array(
+        select column_name::text from information_schema.columns where table_schema || '.' || table_name = obj order by ordinal_position
+    ),',');
+  begin
+    SET session_replication_role = replica;	-- Disable triggers
+    execute 'delete from ' || obj;
+    execute 'copy ' || obj || '(' || collist || ') from ''' || file || '''';
+    execute 'select count(*) from ' || obj || ';' into strict count;
+    SET session_replication_role = DEFAULT;
+    return count;
+  end;
+$$;}
+
+# Language data organized for creation of translation tables
+#-------------------------------------------
+view wm.language {wm.table_text wm.column_text wm.value_text wm.message_text} {select
+  tt.tt_sch as sch, tt.tt_tab as tab, tt.tt_sch || '.' || tt.tt_tab as obj,
+    tt.language as fr_lang,
+    tl.language as language,
+    lv.type, lv.col, lv.tag,
+    lv.fr_title, lv.fr_help,
+    lv.title, lv.help,
+    lv.sorter
+  
+  from		wm.table_text	tt
+  join	(
+    select distinct language from wm.table_text
+    union select 'xyz' as language
+  ) tl on tl.language != tt.language
+  left join	(
+    select fx.tt_sch as sch, fx.tt_tab as tab, 'table' as type,
+      null as col, null as tag,
+      fx.language as fr_lang,	fx.title as fr_title,	fx.help as fr_help,
+      tx.language,		tx.title,		tx.help,
+      fx.tt_sch || '.' || fx.tt_tab  as sorter
+        from wm.table_text	fx
+        left join wm.table_text	tx
+          on tx.tt_sch = fx.tt_sch and tx.tt_tab = fx.tt_tab
+          and tx.language != fx.language
+  
+    union all
+    select fx.ct_sch as sch, fx.ct_tab as tab, 'column' as type,
+      fx.ct_col as col, null as tag,
+      fx.language as fr_lang,	fx.title as fr_title,	fx.help as fr_help,
+      tx.language,		tx.title,		tx.help,
+      fx.ct_sch || '.' || fx.ct_tab || '.' || 'c.' || fx.ct_col as sorter
+        from wm.column_text	fx
+        left join wm.column_text	tx
+          on tx.ct_sch = fx.ct_sch and tx.ct_tab = fx.ct_tab and tx.ct_col = fx.ct_col
+          and tx.language != fx.language
+
+    union all
+    select fx.vt_sch as sch, fx.vt_tab as tab, 'value' as type,
+      fx.vt_col as col, fx.value as tag,
+      fx.language as fr_lang,	fx.title as fr_title,	fx.help as fr_help,
+      tx.language,		tx.title,		tx.help,
+      fx.vt_sch || '.' || fx.vt_tab || '.' || 'c.' || fx.vt_col || '.' || fx.value as sorter
+        from wm.value_text	fx
+        left join wm.value_text	tx
+          on tx.vt_sch = fx.vt_sch and tx.vt_tab = fx.vt_tab and tx.vt_col = fx.vt_col and tx.value = fx.value
+          and tx.language != fx.language
+
+    union all
+    select fx.mt_sch as sch, fx.mt_tab as tab, 'message' as type,
+      null as col, fx.code as tag,
+      fx.language as fr_lang,	fx.title as fr_title,	fx.help as fr_help,
+      tx.language,		tx.title,		tx.help,
+      fx.mt_sch || '.' || fx.mt_tab || '.' || 'm.' || fx.code as sorter
+        from wm.message_text	fx
+        left join wm.message_text	tx
+          on tx.mt_sch = fx.mt_sch and tx.mt_tab = fx.mt_tab and tx.code = fx.code
+          and tx.language != fx.language
+
+  ) lv on lv.sch = tt.tt_sch and lv.tab = tt.tt_tab 
+      and lv.fr_lang = tt.language and (lv.language isnull or lv.language = tl.language)
+    order by lv.sorter;
+} -native {
+  {wm.table_text language title help}
+} -primary {sch tab type col tag}

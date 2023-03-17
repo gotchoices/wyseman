@@ -1,0 +1,9 @@
+#!/bin/bash
+#Remove any non-english text support
+#Typically used in preparation for a schema file build
+
+baseLang="eng"
+echo
+for t in table column value message; do
+  echo "delete from wm.${t}_text where language != '${baseLang}';"
+done
