@@ -71,67 +71,45 @@ $$;}
 
 # Language data organized for creation of translation tables
 #-------------------------------------------
-view wm.language {wm.table_text wm.column_text wm.value_text wm.message_text} {select
-  tt.tt_sch as sch, tt.tt_tab as tab, tt.tt_sch || '.' || tt.tt_tab as obj,
+view wm.language {wm.table_text wm.column_text wm.value_text wm.message_text} {
+  with texts as (
+    select tt_sch as sch, tt_tab as tab, 'table' as type,
+      null as col, null as tag,		language, title, help, 
+      tt_sch || '.' || tt_tab  as sorter
+        from wm.table_text
+      union all
+    select ct_sch as sch, ct_tab as tab, 'column' as type,
+      ct_col as col, null as tag,	language, title, help,
+      ct_sch || '.' || ct_tab || '.c.' || ct_col as sorter
+        from wm.column_text
+      union all
+    select vt_sch as sch, vt_tab as tab, 'value' as type,
+      vt_col as col, value as tag,	language, title, help,
+      vt_sch || '.' || vt_tab || '.c.' || vt_col || '.' || value as sorter
+        from wm.value_text
+      union all
+    select mt_sch as sch, mt_tab as tab, 'message' as type,
+      null as col, code as tag,		language, title, help,
+      mt_sch || '.' || mt_tab || '.m.' || code as sorter
+    from wm.message_text
+  )
+  select tt.tt_sch as sch, tt.tt_tab as tab, tt.tt_sch || '.' || tt.tt_tab as obj,
     tt.language as fr_lang,
     tl.language as language,
-    lv.type, lv.col, lv.tag,
-    lv.fr_title, lv.fr_help,
-    lv.title, lv.help,
-    lv.sorter
+    zf.type, zf.col, zf.tag,
+    zf.title as fr_title, zf.help as fr_help,
+    zt.title, zt.help,
+    zt.sorter
   
   from		wm.table_text	tt
   join	(
     select distinct language from wm.table_text
     union select 'xyz' as language
   ) tl on tl.language != tt.language
-  left join	(
-    select fx.tt_sch as sch, fx.tt_tab as tab, 'table' as type,
-      null as col, null as tag,
-      fx.language as fr_lang,	fx.title as fr_title,	fx.help as fr_help,
-      tx.language,		tx.title,		tx.help,
-      fx.tt_sch || '.' || fx.tt_tab  as sorter
-        from wm.table_text	fx
-        left join wm.table_text	tx
-          on tx.tt_sch = fx.tt_sch and tx.tt_tab = fx.tt_tab
-          and tx.language != fx.language
-  
-    union all
-    select fx.ct_sch as sch, fx.ct_tab as tab, 'column' as type,
-      fx.ct_col as col, null as tag,
-      fx.language as fr_lang,	fx.title as fr_title,	fx.help as fr_help,
-      tx.language,		tx.title,		tx.help,
-      fx.ct_sch || '.' || fx.ct_tab || '.' || 'c.' || fx.ct_col as sorter
-        from wm.column_text	fx
-        left join wm.column_text	tx
-          on tx.ct_sch = fx.ct_sch and tx.ct_tab = fx.ct_tab and tx.ct_col = fx.ct_col
-          and tx.language != fx.language
-
-    union all
-    select fx.vt_sch as sch, fx.vt_tab as tab, 'value' as type,
-      fx.vt_col as col, fx.value as tag,
-      fx.language as fr_lang,	fx.title as fr_title,	fx.help as fr_help,
-      tx.language,		tx.title,		tx.help,
-      fx.vt_sch || '.' || fx.vt_tab || '.' || 'c.' || fx.vt_col || '.' || fx.value as sorter
-        from wm.value_text	fx
-        left join wm.value_text	tx
-          on tx.vt_sch = fx.vt_sch and tx.vt_tab = fx.vt_tab and tx.vt_col = fx.vt_col and tx.value = fx.value
-          and tx.language != fx.language
-
-    union all
-    select fx.mt_sch as sch, fx.mt_tab as tab, 'message' as type,
-      null as col, fx.code as tag,
-      fx.language as fr_lang,	fx.title as fr_title,	fx.help as fr_help,
-      tx.language,		tx.title,		tx.help,
-      fx.mt_sch || '.' || fx.mt_tab || '.' || 'm.' || fx.code as sorter
-        from wm.message_text	fx
-        left join wm.message_text	tx
-          on tx.mt_sch = fx.mt_sch and tx.mt_tab = fx.mt_tab and tx.code = fx.code
-          and tx.language != fx.language
-
-  ) lv on lv.sch = tt.tt_sch and lv.tab = tt.tt_tab 
-      and lv.fr_lang = tt.language and (lv.language isnull or lv.language = tl.language)
-    order by lv.sorter;
+  join		texts	zf on zf.language = tt.language
+  		and zf.sch = tt.tt_sch and zf.tab = tt.tt_tab
+  left join	texts	zt on zt.language = tl.language
+  		and zt.sorter = zf.sorter
 } -native {
   {wm.table_text language title help}
 } -primary {sch tab type col tag}
