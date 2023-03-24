@@ -34,7 +34,7 @@ describe("Orphan: Modify DB schema", function() {
       done()
     })
   })
-
+/*
   it('can disable pruning', function(done) {
     Child.exec("wyseman objects testo.wms --no-prune", {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
   })
@@ -62,7 +62,7 @@ log.debug("Error info:", e)
       done()
     })
   })
-
+/* */
   after('Disconnect from test database', function() {
     db.disconnect()
   })

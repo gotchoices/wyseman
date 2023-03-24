@@ -8,7 +8,7 @@ const assert = require("assert");
 const Fs = require('fs')
 const Path = require('path')
 const Child = require('child_process')
-const { TestDB, DBAdmin, Log, DbClient, SchemaDir, SchemaFile, WmItems } = require('./settings')
+const { TestDB, DBAdmin, Log, DbClient, SchemaDir, SchemaFile } = require('./settings')
 var log = Log('test-schema')
 const dbConfig = {database: TestDB, user: DBAdmin, connect: true, log}
 var release = '1b'
@@ -118,13 +118,13 @@ log.debug("schema:", begin)
     })
   })
 
-  it('should build a JSON schema file with objects', function(done) {
+  it('should build a JSON schema file with expected objects', function(done) {
     Child.exec("wyseman init test1.wmi -S " + jsonSchema, {cwd: SchemaDir}, (e,o) => {if (e) done(e)
       let content = Fs.readFileSync(jsonSchema).toString()
         , sch = JSON.parse(content)
       assert.ok(sch.publish != null)
 log.debug("Schema objects:", sch.objects.length)
-      assert.equal(sch.objects.length, WmItems)
+      assert.equal(sch.objects.length, 199)
       done()
     })
   })

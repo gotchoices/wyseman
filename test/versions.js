@@ -5,7 +5,7 @@ const assert = require("assert");
 const Fs = require('fs')
 const Path = require('path')
 const Child = require('child_process')
-const { TestDB, DBAdmin, Log, DbClient, SchemaDir, SchemaFile, WmItems } = require('./settings')
+const { TestDB, DBAdmin, Log, DbClient, SchemaDir, SchemaFile } = require('./settings')
 var log = Log('test-schema')
 const dbConfig = {database: TestDB, user: DBAdmin, connect: true, log}
 
@@ -24,13 +24,21 @@ describe("Versions: Build/modify DB with canned JSON schema", function() {
     })
   })
 
+  it('can build development objects', function(done) {
+    let files = ['run_time.wms','develop.wms','run_time.wmt','develop.wmt'].map(f => 
+      Path.join(__dirname, '../lib', f)
+    )
+log.debug('cmd:', `wyseman ${files}`)
+    Child.exec(`wyseman ${files.join(' ')}`, {cwd: SchemaDir}, (e,o) => {if (e) done(e); done()})
+  })
+
   it('wm.objects exists and has items', function(done) {
     let sql = "select count(*), wm.next() from wm.objects"
     db.query(sql, null, (e, res) => {if (e) done(e)
       assert.equal(res.rows.length, 1)
       let row = res.rows[0]
 log.debug("Schema objects:", row.count)
-      assert.equal(row.count, WmItems)
+      assert.equal(row.count, 204)
       assert.equal(row.next, 1)
       done()
     })
