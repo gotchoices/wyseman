@@ -173,7 +173,7 @@ create or replace function wm.grant(
   , allow	text		-- select, insert, update, delete, etc
 ) returns boolean language plpgsql as $$
   declare
-    pstr	text default array_to_string(array[otyp||':'||onam,priv,level::text,allow], ',');
+    pstr	text default array_to_string(array[otyp||':'||onam, priv, level::text, allow], '|');
     grlist	text[];
     blt		boolean;	-- from object record
   begin
@@ -398,7 +398,7 @@ raise notice 'Create:% :%:%', trec.depth, trec.object, trec.obj_ver;
         
         foreach s in array trec.grants loop	-- for each specified object, expand to dependent objects
 -- raise notice 'Grant:% :%', trec.object, s;
-          garr = string_to_array(s,',');
+          garr = string_to_array(s, '|');
           glev = garr[2] || '_' || garr[3];
           if garr[2] = 'public' then
             glev = garr[2];
