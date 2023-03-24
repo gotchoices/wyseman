@@ -1,27 +1,55 @@
 #Text descriptions for meta-data tables
 #Copyright WyattERP.org; See license in root of this package
 # -----------------------------------------------------------------------------
+---
+wm.table_text:
+  focus: code
+  fields:
+  - {col: language, size: 4}
+  - {col: title, size: 40}
+  - {col: help, size: 40, spe: edw}
 
-foreach x {table_text column_text value_text message_text column_pub} {
-  tabdef wm.$x -focus code -fields {
-    {language	-size  4}
-    {title	-size 40}
-    {help	-size 40 -spf edw}
-  }
-}
+wm.column_text:
+  focus: code
+  fields:
+  - {col: language, size: 4}
+  - {col: title, size: 40}
+  - {col: help, size: 40, spe: edw}
 
-tabdef wm.objects -focus obj_nam -fields {
-    {name	-size  40}
-    {checkit	-size  4}
-    {build	-size  4}
-    {built	-size  4}
-    {mod_ver	-size  4}
-    {deps	-size  40 -spf edw}
-    {ndeps	-size  40 -spf edw}
-    {grants	-size  40 -spf edw}
-    {col_data	-size  40 -spf edw}
-    {crt_sql	-size  40 -spf edw}
-    {drp_sql	-size  40 -spf edw}
-    {min_rel	-size  4}
-    {max_rel	-size  4}
-}
+wm.value_text:
+  focus: code
+  fields:
+  - {col: language, size: 4}
+  - {col: title, size: 40}
+  - {col: help, size: 40, spe: edw}
+
+wm.message_text:
+  focus: code
+  fields:
+  - {col: language, size: 4}
+  - {col: title, size: 40}
+  - {col: help, size: 40, spe: edw}
+
+wm.column:pub:
+  focus: code
+  fields:
+  - {col: language, size: 4}
+  - {col: title, size: 40}
+  - {col: help, size: 40, spe: edw}
+
+wm.objects:
+  fockus: obj_nam
+  fields:
+   - {col: nam,e	size:  40}
+   - {col: checkit,	size:  4}
+   - {col: build,	size:  4}
+   - {col: built,	size:  4}
+   - {col: mod_ver,	size:  4}
+   - {col: deps,	size:  40, spe: edw}
+   - {col: ndeps,	size:  40, spe: edw}
+   - {col: grants,	size:  40, spe: edw}
+   - {col: col_data,	size:  40, spe: edw}
+   - {col: crt_sql,	size:  40, spe: edw}
+   - {col: drp_sql,	size:  40, spe: edw}
+   - {col: min_rel,	size:  4}
+   - {col: max_rel,	size:  4}

@@ -526,6 +526,7 @@ proc wmparse::tabtext {table args} {
     hand_query $table $query
 }
 
+# DEPRECATED:  Use Yaml format now for table/column metadata
 # Handle a structure containing table default view information
 # If args == {}, return the default view info for the given table
 #------------------------------------------------------------
@@ -537,7 +538,7 @@ proc wmparse::tabdef {table args} {
 #    set ob($name.defs) $args
 
     argform {focus fields} args
-    argnorm {{focus 2} {fields 1} {inherits 1} {display 1} {sort 2} {subviews 2} {actions 1} {json 1}} args
+    argnorm {{focus 2} {fields 1} {display 1} {sort 2} {subviews 2} {actions 1} {json 1}} args
     lassign [table_parts $table] schema table
 
     set fargs [xswitchs fields args]		;#grab the field arguments
@@ -549,11 +550,20 @@ proc wmparse::tabdef {table args} {
         set fa [lassign $fa tag]
         argform {input size sub} fa		;#add switch names to all args
         argnorm {{column 2} {title 2} {help 2} {subframe 2} {onvalue 3} {offvalue 4} {special 3} {spf 3 special} {background 2} {bg 2 background} {justify 2} {initial 3} {template 3} {optional 3} {state 3} {write 2} {depend 3} {display 2} {inside 3} {input 3} {sort 2} {hint 2}} fa
-
+#puts "fa:$fa"
         foreach {sw va} $fa {
             if {[string range $sw 0 0] != {-}} {error "Expected switch: $sw"}
-#            if {$va == {}} continue		;#exclude blank switches? (no)
-            append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) values ('$schema','$table','$tag','[string range $sw 1 end]','[regsub -all {'} $va {''}]');\n"
+            if {$va == {}} {			;#exclude blank switches?
+              set qva {'""'}
+            } elseif {[string is integer $va]} {
+              set qva "to_jsonb($va)"
+            } elseif {[llength $va] > 1} {
+              set qva "'\[[join [regsub -all {'} $va {''}] {,}]\]'::jsonb"
+            } else {
+              set qva "to_jsonb('[regsub -all {'} $va {''}]'::text)"
+            }
+#puts "tag:$tag sw:$sw va:$va qva:$qva"
+            append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) values ('$schema','$table','$tag','[string range $sw 1 end]', $qva);\n"
         }
     }
 
@@ -573,14 +583,6 @@ proc wmparse::tabdef {table args} {
       if {[llength $al] > 0} {lappend jargs "-$sw" "\[[join $alist ,]\]"}
     }
     if {[set fo [xswitch focus args {} {} 0]] != {}} {lappend jargs "-focus" "\"$fo\""}	;#convert focus arg to JSON
-
-#Deprecated
-#    if {[set inh [xswitchs inherits args]] != {}} {	;#Handle -inherit switch
-#        lassign [split $inh {.}] sch tab
-#        append query "insert into wm.table_style (ts_sch,ts_tab,sw_name,sw_value) select '$schema','$table',sw_name,sw_value from wm.table_style where ts_sch = '$sch' and ts_tab = '$tab' and inherit on conflict do nothing;\n"
-#        append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) select '$schema','$table',cs_col,sw_name,sw_value from wm.column_style where cs_sch = '$sch' and cs_tab = '$tab' on conflict do nothing;\n"
-##puts "query:$query"
-#    }
 
     foreach {sw va} $jargs {			;#write table and column styles to database
         if {[string range $sw 0 0] != {-}} {error "Expected switch: $sw"}
@@ -602,7 +604,7 @@ proc wmparse::tabdef {table args} {
             }
             set fldlist "'[join $fldlist {','}]'"; set idxlist "'[join $idxlist {','}]'"
 #puts "$tabswitch fldlist:$fldlist\n        idxlist:$idxlist"
-            append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) select cdt_sch,cdt_tab,cdt_col,'$tabswitch',coalesce(array_position(Array\[$idxlist\], cdt_col::text), 0) from wm.column_data where cdt_sch = '$schema' and cdt_tab = '$table' and cdt_col in ($fldlist) on conflict do nothing;\n"
+            append query "insert into wm.column_style (cs_sch,cs_tab,cs_col,sw_name,sw_value) select cdt_sch,cdt_tab,cdt_col,'$tabswitch',to_jsonb(coalesce(array_position(Array\[$idxlist\], cdt_col::text), 0)) from wm.column_data where cdt_sch = '$schema' and cdt_tab = '$table' and cdt_col in ($fldlist) on conflict do nothing;\n"
         }
     }
 

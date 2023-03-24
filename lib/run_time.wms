@@ -25,7 +25,7 @@ table wm.column_style {} {
   , cs_tab		name
   , cs_col		name
   , sw_name		varchar not null
-  , sw_value		varchar not null
+  , sw_value		jsonb not null
   , primary key (cs_sch, cs_tab, cs_col, sw_name)
 }
     
@@ -321,7 +321,7 @@ view wm.column_meta {wm.column_data wm.column_istyle} {select
   , cd.nat_sch || '.' || cd.nat_tab		as nat
   , cd.nat_col
   , (select array_agg(distinct value) from wm.value_text vt where vt.vt_sch = cd.nat_sch and vt.vt_tab = cd.nat_tab and vt.vt_col = cd.nat_col) as values
-  , array (select array[sw_name, sw_value] from wm.column_istyle cs where cs.cs_sch = cd.cdt_sch and cs.cs_tab = cd.cdt_tab and cs.cs_col = cd.cdt_col order by sw_name) as styles
+  , (select coalesce(jsonb_object_agg(sw_name, sw_value),'{}'::jsonb) from wm.column_istyle cs where cs.cs_sch = cd.cdt_sch and cs.cs_tab = cd.cdt_tab and cs.cs_col = cd.cdt_col) as styles
   from		wm.column_data cd
     where	cd.cdt_col != '_oid'
     and		cd.field >= 0;
@@ -366,7 +366,7 @@ view wm.table_meta {wm.table_data wm.table_style wm.column_meta wm.fkeys_pub} {s
   , to_jsonb(td.pkey)			as pkey
   , td.cols
   , (select jsonb_object_agg(sw_name,sw_value::jsonb) from wm.table_style ts where ts.ts_sch = td.td_sch and ts.ts_tab = td.td_tab) as styles
-  , (select array_agg(to_jsonb(d)) from (select col, field, type, nonull, length, pkey, to_jsonb(values) as values, jsonb_object(styles) as styles from wm.column_meta cm where cm.sch = td.td_sch and cm.tab = td.td_tab) d) as columns
+  , (select array_agg(to_jsonb(d)) from (select col, field, type, nonull, length, pkey, to_jsonb(values) as values, styles as styles from wm.column_meta cm where cm.sch = td.td_sch and cm.tab = td.td_tab) d) as columns
   , (select array_agg(to_jsonb(d)) from (select ft_sch || '.' || ft_tab as "table", to_jsonb(tt_cols) as columns, to_jsonb(ft_cols) as foreign from wm.fkeys_pub ks where ks.tt_sch = td.td_sch and ks.tt_tab = td.td_tab) d) as fkeys
   from		wm.table_data		td;
 } -primary {sch tab} -grant public -native {{wm.table_data pkey}}
