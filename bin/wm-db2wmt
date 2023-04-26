@@ -35,7 +35,7 @@ var mkWhere = function(prefix = '', view = opts.view) {
 }
 
 let tSql = `select * from wm.table_lang where ${mkWhere('').join(' and ')} order by sch,tab`
-let tabs = db.x(tSql)				//;console.log("tabs:", tabs)
+let tabs = db.x(tSql)				//;console.log("tSql", tSql, "tabs:", tabs)
 for (let tab of tabs) {				//;console.log('tab:', tab)
   console.log(`tabtext ${tab.sch}.${tab.tab} -lang ${tab.language} {${tab.title}} {${tab.help}} {`)
 
