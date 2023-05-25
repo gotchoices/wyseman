@@ -278,7 +278,7 @@ tabtext wm.role_members	{Role Members}	{Summarizes information from the system c
     {level		{Level}		{What level this role has in the privilge}}
 }
 
-tabtext wm.lang {Language Text} {Language messages pertaining to Wyseman service routines} {
+tabtext wm.lang {Language Text} {Language messages for Wyseman service routines and common functions} {
   {always	{Always}	{Always true}}
 } -message {
     {badOperator	{Invalid Operator}	{The specified logic operator is not understood}}
@@ -294,5 +294,6 @@ tabtext wm.lang {Language Text} {Language messages pertaining to Wyseman service
     {badLeft		{Invalid Left Side}	{The left side of the comparison logic was not understood}}
     {badRight		{Invalid Right Side}	{The right side of the comparison logic was not understood}}
     {badLogic		{Invalid Logic}		{The logic structure was not understood}}
+    {search		{Search}		{Find desired data or records}}
     {23505		{Key Violation}		{An operation would have resulted in multiple records having duplicated data, which is required to be unique}}
 }
