@@ -274,7 +274,7 @@ view wm.column_pub {wm.column_data wm.column_text} {select
   , coalesce(vt.help, nt.help)			as help
   from		wm.column_data cd
     left join	wm.column_text vt	on vt.ct_sch = cd.cdt_sch and vt.ct_tab = cd.cdt_tab and vt.ct_col = cd.cdt_col
-    left join	wm.column_text nt	on nt.ct_sch = cd.nat_sch and nt.ct_tab = cd.nat_tab and nt.ct_col = cd.nat_col
+    left join	wm.column_text nt	on nt.ct_sch = cd.nat_sch and nt.ct_tab = cd.nat_tab and nt.ct_col = cd.nat_col and cd.nat_tab != cd.cdt_tab
 
     where	cd.cdt_col != '_oid'
     and		cd.field >= 0;
