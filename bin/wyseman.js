@@ -120,6 +120,7 @@ dbc.connect(() => {
     output.write(JSON.stringify(schema.get(), null, 1))
   }
   output.on('finish', () => {
+    db.x(`select pg_notify('wyseman', '{"target":"run"}')`)
     dbc.disconnect()				//Disconnect async connection
     process.exit(0);				//Die nicely (and reset the tty)
   })
