@@ -52,6 +52,7 @@ wm.table_pub:
   - {col: pkey, size: 40}
   - {col: help, size: 60}
   display: [obj, kind, cols, pkey, title, help]
+  where: {language: 'eng'}
 
 wm.objects:
   fockus: obj_nam
