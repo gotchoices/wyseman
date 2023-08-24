@@ -30,12 +30,28 @@ wm.message_text:
   - {col: title, size: 40}
   - {col: help, size: 40, spe: edw}
 
-wm.column:pub:
+wm.column_pub:
   focus: code
   fields:
   - {col: language, size: 4}
   - {col: title, size: 40}
   - {col: help, size: 40, spe: edw}
+
+wm.table_data:
+  fields:
+  - {col: td_sch, size: 10}
+  - {col: td_tab, size: 30}
+  - {col: obj, size: 40}
+  - {col: kind, size: 4}
+  display: [obj, kind, cols, system, pkey]
+
+wm.table_pub:
+  fields:
+  - {col: obj, size: 40}
+  - {col: kind, size: 4}
+  - {col: pkey, size: 40}
+  - {col: help, size: 60}
+  display: [obj, kind, cols, pkey, title, help]
 
 wm.objects:
   fockus: obj_nam
