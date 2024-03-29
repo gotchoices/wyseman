@@ -190,5 +190,4 @@ describe("Schema: Build DB with canned SQL schema", function() {
     done()
   })
 
-});
-
+})

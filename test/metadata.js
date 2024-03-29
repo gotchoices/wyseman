@@ -38,4 +38,4 @@ describe("Check JSON structures in data dictionary", function() {
     db.disconnect()
     done()
   })
-});
+})
