@@ -344,6 +344,7 @@ view wm.column_lang {wm.column_data wm.table_text wm.column_text wm.value_text} 
   , tt.language
   , coalesce(ct.title, nt.title, cd.cdt_col)	as title
   , coalesce(ct.help, nt.help)			as help
+  , ct.title notnull				as exp
   , cd.cdt_sch in ('pg_catalog','information_schema') as system
   , cd.field
   from		wm.column_data	cd

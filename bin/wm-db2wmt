@@ -42,12 +42,13 @@ for (let tab of tabs) {				//;console.log('tab:', tab)
   let cSql = `select * from wm.column_lang where ${mkWhere('', tab.tab).join(' and ')} order by field`
   let cols = db.x(cSql)
   for (let col of cols) {			//;console.log('col:', col)
-    if (col.sch == col.nat_sch && col.tab == col.nat_tab 
+//if (col.sch == col.nat_sch && col.tab != col.nat_tab) console.log('EXP~:', col)
+    if (col.exp || (col.sch == col.nat_sch && col.tab == col.nat_tab)
           && (col.help || col.title != col.col )) {
       console.log(`  {${col.col} {${col.title}} {${col.help}}` + (col.values ? ' {' : '}'))
       if (col.values?.length > 0) {
         col.values.forEach(val => {
-          console.log(`    {${val.value} {${val.title}} {${val.help}}}`)
+          console.log(`    {${val.value || '{}'} {${val.title}} {${val.help}}}`)
         })
         console.log(col.values ? '  }}' : '  }')
       }
