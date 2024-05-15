@@ -1,3 +1,2 @@
 #Prevent windows from mapping scripts to CR-LF
-bin/* text eol=lf
-*.sh text eol=lf
+* text eol=lf
