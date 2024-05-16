@@ -34,7 +34,7 @@ table wm.column_style {} {
 table wm.table_text {} {
     tt_sch		name
   , tt_tab		name
-  , language	varchar not null
+  , language		varchar not null
   , title		varchar
   , help		varchar
   , primary key (tt_sch, tt_tab, language)
@@ -213,6 +213,7 @@ function {wm.init_dictionary()} {wm.default_native() wm.column_native wm.column_
           update wm.column_native set pkey = (cnt_col = any(tarr)) where cnt_sch = oarr[1] and cnt_tab = oarr[2];
         end if;
       end loop;
+      perform pg_notify('wyseman', '{"target":"dict"}');
       return true;
     end;
   $$;
@@ -274,7 +275,7 @@ view wm.column_pub {wm.column_data wm.column_text} {select
   , coalesce(vt.help, nt.help)			as help
   from		wm.column_data cd
     left join	wm.column_text vt	on vt.ct_sch = cd.cdt_sch and vt.ct_tab = cd.cdt_tab and vt.ct_col = cd.cdt_col
-    left join	wm.column_text nt	on nt.ct_sch = cd.nat_sch and nt.ct_tab = cd.nat_tab and nt.ct_col = cd.nat_col
+    left join	wm.column_text nt	on nt.ct_sch = cd.nat_sch and nt.ct_tab = cd.nat_tab and nt.ct_col = cd.nat_col and cd.nat_tab != cd.cdt_tab
 
     where	cd.cdt_col != '_oid'
     and		cd.field >= 0;
@@ -329,7 +330,7 @@ view wm.column_meta {wm.column_data wm.column_istyle} {select
 
 # Column language data
 #-------------------------------------------
-view wm.column_lang {wm.column_data wm.column_text wm.value_text} {select
+view wm.column_lang {wm.column_data wm.table_text wm.column_text wm.value_text} {select
     cd.cdt_sch					as sch
   , cd.cdt_tab					as tab
   , cd.cdt_sch || '.' || cd.cdt_tab		as obj
@@ -343,6 +344,7 @@ view wm.column_lang {wm.column_data wm.column_text wm.value_text} {select
   , tt.language
   , coalesce(ct.title, nt.title, cd.cdt_col)	as title
   , coalesce(ct.help, nt.help)			as help
+  , ct.title notnull				as exp
   , cd.cdt_sch in ('pg_catalog','information_schema') as system
   , cd.field
   from		wm.column_data	cd

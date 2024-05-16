@@ -317,15 +317,16 @@ proc wmparse::index {args} {
     } else {
         set tab $dep
     }
+#puts "Name:$name tab:$tab CR:$create"
     if {[regexp -nocase {^create } $create]} {		;#literal create script specified
         if {$name == {}} {error "Must specify index name"}
     } else {					;#we'll construct a name and a create script
         if {$name == {}} {
-            if {[llength [split $tab .]] > 1} {set ns "[lindex [split $tab .] 0]."} else {set ns {}}
             set name "[string map {. _} $tab]_x_[join $create _]"		;#put index in correct schema
-#puts "ns:$ns $name:$name tab:$tab"
-            if {$drop == {}} {set drop "drop index if exists $ns$name;"}		;#we need to prefix with namespace for the drop
+#puts "ns:$ns name:$name tab:$tab"
         }
+        if {[llength [split $tab .]] > 1} {set ns "[lindex [split $tab .] 0]."} else {set ns {}}
+        if {$drop == {}} {set drop "drop index if exists $ns$name;"}		;#we need to prefix with namespace for the drop
         if {[string range $create 0 0] == {(}} {set cr $create} else {set cr [join $create ,]}	;#if it is a function, don't try to comma separate fields
         set create "create index $name on $tab ($cr)"
     }

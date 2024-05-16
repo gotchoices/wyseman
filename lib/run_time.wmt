@@ -174,6 +174,7 @@ tabtext wm.column_lang {Column language} {A view of descriptive language data as
     {values		{Values}	{A JSON description of the allowable values for this column}}
     {system		{System}	{Indicates if this table/view is built in to PostgreSQL}}
     {nat		{Native}	{The (possibly ancestor) schema and table/view this language information descends from}}
+    {exp		{Explicit}	{The language for this view column is specified explicitly}}
 }
 
 tabtext wm.column_meta {Column Metadata} {A view of data about the use and display of the columns of tables and views} {
@@ -278,7 +279,7 @@ tabtext wm.role_members	{Role Members}	{Summarizes information from the system c
     {level		{Level}		{What level this role has in the privilge}}
 }
 
-tabtext wm.lang {Language Text} {Language messages pertaining to Wyseman service routines} {
+tabtext wm.lang {Language Text} {Language messages for Wyseman service routines and common functions} {
   {always	{Always}	{Always true}}
 } -message {
     {badOperator	{Invalid Operator}	{The specified logic operator is not understood}}
@@ -294,5 +295,6 @@ tabtext wm.lang {Language Text} {Language messages pertaining to Wyseman service
     {badLeft		{Invalid Left Side}	{The left side of the comparison logic was not understood}}
     {badRight		{Invalid Right Side}	{The right side of the comparison logic was not understood}}
     {badLogic		{Invalid Logic}		{The logic structure was not understood}}
+    {search		{Search}		{Find desired data or records}}
     {23505		{Key Violation}		{An operation would have resulted in multiple records having duplicated data, which is required to be unique}}
 }

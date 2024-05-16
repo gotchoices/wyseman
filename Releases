@@ -1,5 +1,12 @@
 Change Log:
 
+1.1.13	2023-Oct
+	- Separate development schema module
+	- Better handling of binary data
+	- Handle language data better
+	- Better track data dictionary changes
+	- Better error tolerance
+
 1.1.12	2023-Mar
 	- Parse metadata files written in yaml
 	- Break out development schema objects separately

@@ -8,9 +8,9 @@ const assert = require("assert");
 const Fs = require('fs')
 const Path = require('path')
 const Child = require('child_process')
-const { TestDB, DBAdmin, Log, DbClient, SchemaDir, SchemaFile } = require('./settings')
+const { TestDB, DBHost, DBPort, DBAdmin, Log, DbClient, SchemaDir, SchemaFile } = require('./settings')
 var log = Log('test-schema')
-const dbConfig = {database: TestDB, user: DBAdmin, connect: true, log}
+const dbConfig = {database: TestDB, user: DBAdmin, connect: true, log, host: DBHost, port: DBPort}
 var release = '1b'
 var sqlSchema = SchemaFile(release, '.sql')
 var jsonSchema = SchemaFile(release)
@@ -26,7 +26,7 @@ describe("Schema: Build DB schema files", function() {
   })
 
   before('Delete sample database if it exists', function(done) {
-    Child.exec(`dropdb -U ${DBAdmin} ${TestDB}`, (err, out) => done())
+    Child.exec(`dropdb -U ${DBAdmin} -h ${DBHost} -p ${DBPort} ${TestDB}`, (err, out) => done())
   })
 
   before('Build schema database', function(done) {
@@ -135,7 +135,7 @@ log.debug("Schema objects:", sch.objects.length)
   })
 
   after('Delete sample database', function(done) {
-    Child.exec(`dropdb -U ${DBAdmin} ${TestDB}`, (err, so) => {
+    Child.exec(`dropdb -U ${DBAdmin} -h ${DBHost} -p ${DBPort} ${TestDB}`, (err, so) => {
       if (err) done(err)
       done()
     })
@@ -190,5 +190,4 @@ describe("Schema: Build DB with canned SQL schema", function() {
     done()
   })
 
-});
-
+})
