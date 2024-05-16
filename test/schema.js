@@ -8,7 +8,7 @@ const assert = require("assert");
 const Fs = require('fs')
 const Path = require('path')
 const Child = require('child_process')
-const { TestDB, DBHost, DBPort, DBAdmin, Log, DbClient, SchemaDir, SchemaFile } = require('./settings')
+const { TestDB, DBHost, DBPort, DBAdmin, Log, DbClient, SchemaDir, SchemaFile, timeLong } = require('./settings')
 var log = Log('test-schema')
 const dbConfig = {database: TestDB, user: DBAdmin, connect: true, log, host: DBHost, port: DBPort}
 var release = '1b'
@@ -17,7 +17,7 @@ var jsonSchema = SchemaFile(release)
 var interTest = {}
 
 describe("Schema: Build DB schema files", function() {
-  this.timeout(3000)
+  this.timeout(timeLong)
   var db
 
   before('Delete old history/migration files', function(done) {

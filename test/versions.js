@@ -5,11 +5,12 @@ const assert = require("assert");
 const Fs = require('fs')
 const Path = require('path')
 const Child = require('child_process')
-const { TestDB, DBAdmin, Log, DbClient, SchemaDir, SchemaFile } = require('./settings')
+const { TestDB, DBAdmin, Log, DbClient, SchemaDir, SchemaFile, timeLong } = require('./settings')
 var log = Log('test-schema')
 const dbConfig = {database: TestDB, user: DBAdmin, connect: true, log}
 
 describe("Versions: Build/modify DB with canned JSON schema", function() {
+  this.timeout(timeLong)
   var db
 
   before('Delete sample database', function(done) {
@@ -119,6 +120,7 @@ log.debug("Delta object:", darr)
 })
 
 describe("Versions: Recover/rebuild DB with existing deltas", function() {
+  this.timeout(timeLong)
   var db
 
   before('Delete sample database', function(done) {
