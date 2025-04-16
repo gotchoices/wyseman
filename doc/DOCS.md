@@ -1,0 +1,131 @@
+# This file will serve as a tracking file for the project of documenting wyseman
+
+## Goal
+- Create a comprehensive set of markdown documents in the doc folder
+- Start with top-level README.md which serves primarily as a table of contents
+- Create a separate, named file (example: introduction.md, history.md) for each section
+- Each file has prev/TOC/next links at top and bottom to cycle through in TOC order or return to the TOC where a section can be jumped to directly
+- For each section drafted, we will:
+  - Scan existing scant documentation to glean any useful information
+  - Scan example code, where applicable (test folder, mychips implementation) to improve our understanding of current function
+  - Scan source code to improve our understanding of current function
+  - Draft a definitive and accurate description of the section topic
+
+## Current sad state of documentation
+- README.md in wyseman root is a reasonable summary.
+  It contains a historical narrative of the evolution of wyseman from tcl to ruby to current js implementation
+- Doc folder contains three old files:
+  - Original: Document for an old version of wyseman written in tcl
+  - Control: Fairly old document from tcl days but still contains some good background information relevant to current implementation
+  - Versions.md: Newer document created after js implementation.  Was used as a planning document for the schema version control system
+- Test folder contains helpful regression tests and examples of usage
+
+## Values
+- Documentation should not be "COIK" (Clear Only If Known).  In other words, use language that will convey meaning to someone not already knowledgeable about the topic.
+- Don't include fluff (words/sentences/sections that don't convey useful information).  An example: "This system is build to facilitate the development of meaningful and functional schemas"
+- Each word, section, sentence should be present in order to explain the information a developer will need in order to use the package.  No more, no less.
+- Don't bluff.
+- AI agents especially:
+  - Don't make information up
+  - If you don't know, research it
+  - If you can't find it, ask
+  - Don't make assumptions
+  - Read and analyze the code, document what it is actually doing
+  - If it doesn't seem right, ask the developer before making assumptions
+
+## Possible section topics (need to be re-ordered more logically)
+- Introduction; what components do we have
+  - command line utilities for schema authoring/maintenance
+  - run-time libraries
+  - bootstrap schema, object loader
+  - Part of WyattERP suite (wyseman, wylib, wyselib, wyclif)
+  - Scan the other packages for background on what each does (make very brief description here)
+- Basic function
+  - How we define a schema
+  - Files are primary source of truth
+  - Image of schema written to database
+  - Each object is versioned and shows dependencies
+  - Any time we change an object, the database can take down that object and rebuild it
+  - It also knows to take down dependencies and rebuild them
+  - Table data gets saved and restored in a single transaction so upgrades can happen on a running DB
+- Authoring schema files
+  - Describe TCL dynamic lists
+  - wms files
+    - Describe all possible keywords/objects (see lib/wmparse.tcl for reference)
+    - Describe standard switches
+  - wmt files
+    - Describe all possible keywords
+    - Describe standard switches
+  - Distinction between wms/wmt really organizational and arbitrary.  They could be in the same file as far as the parser cares.
+  - wmd files
+    - purpose: describe preferred display criteria
+    - how it is stored in the db (research tables)
+    - explain sample queries of the data dictionary
+      - table_lang
+      - table_pub
+      - column_pub
+    - yaml format
+  - wmi files
+    - shell format
+    - output SQL
+    - how/when invoked (look to implementations in test and mychips for examples)
+- Wyseman command line utility
+  - Configuration (Wyseman.conf, Makefiles, environment variables)
+  - Building the schema
+  - Build targets: objects, init, defs, text, language
+  - Command line switches, usage
+  - Managing table schema changes (also discuss weaknesses, missing features)
+- Versioning System
+  - Goal: Any implementation of the DB at any version can be upgraded to any other later version at any time
+  - Details strategy of versioning implementation
+  - Schema file format
+  - Wyseman.hist file format/contents
+  - Current flaws: not all table mutations can be properly modeled
+    - Area for future enhancement
+    - Research other products that do SQL schema management
+    - Is there an option that wyseman might use as a backend instead of the current build system?
+- Description of files
+  - Describe each file (or group of similar files) in the system
+- Run-time support
+  - Files/modules to include in backend server to access wyseman-authored database
+  - Files/modules to include in client to interface with backend
+- API reference
+  - JSON-packaged SQL format (how to issue SQL commands via json to the backend)
+  - Research lib/handler.js to describe syntax precisely
+  - How each CRUD command is formed, give examples (can look to queries in mychips/client/chark implementation)
+  - How to access language tags
+    - table
+    - column
+    - value
+    - message
+  - Connecting/authentication to the backend
+    - Current websocket implementation
+      - Connection tokens, generating a connection token (wyclif/bin/adminticket for example)
+      - How key exchange works (analyze code in client_ws.js, wyseman.js)
+      - Document relevant example code from mychips/test/sample/entcli
+    - Future development: libp2p connection
+      - How connection tokens would differ (multi-address)
+      - Simpler implementation
+- Goals for other future enhancements
+- Background
+  - Reason for authoring schema files in TCL (best wrapper I've found for SQL)
+  - Project history
+
+## Project Organization and Workflow
+- Intent is for AI agent to build the documentation
+- This will have to be done in chunks
+- Suggested Steps:
+  - Analyze all possible topics, compare to suggested outline above
+  - Discover new topics/chapters that will be needed
+  - Organize topics/chapters in logical presentation
+  - Create all chapter files with navigation and Table of Contents but files contain only checklists for content in-fill
+  - Take on documentation one file or section at a time
+  - Make a detailed plan in a separate tracking file (STATUS.md, for example) for each chapter/section
+    - Do the research
+    - Create the content, in-filling into the appropriate chapter file
+    - Track progress in the STATUS file
+    - Human developer will review the chapter draft, making changes and inserting comments for the AI agent which begin at column 0 with a '!' character.
+    - AI agent will integrate comments and then remove the comment lines
+    - AI agent will update STATUS.md to reflect the chapter's review status
+    - AI agent will check for the next chapter to work on based on STATUS.md
+    - Iterate on each chapter until documentation complete
