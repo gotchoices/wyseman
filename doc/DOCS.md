@@ -1,4 +1,4 @@
-# This file will serve as a tracking file for the project of documenting wyseman
+# This file will serve as a tracking file for the project of documenting wyseman, AI assisted
 
 ## Goal
 - Create a comprehensive set of markdown documents in the doc folder
