@@ -6,7 +6,7 @@ This guide provides information on how to contribute to the Wyseman project, par
 
 ## Project Overview
 
-Wyseman is an open-source PostgreSQL schema management tool developed by the GotChoices organization. It is part of a larger ecosystem that includes:
+Wyseman is an open-source PostgreSQL schema management tool developed by the [GotChoices Foundation](https://gotchoices.org). It is part of a larger ecosystem that includes:
 
 - **[Wyseman](https://github.com/gotchoices/wyseman)**: Schema authoring and management
 - **[Wylib](https://github.com/gotchoices/wylib)**: Vue.js UI component library
